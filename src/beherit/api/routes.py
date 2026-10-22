@@ -8,14 +8,20 @@ from pydantic import BaseModel, Field
 from sse_starlette.sse import EventSourceResponse
 
 from beherit.core.auth_manager import AgentAuthManager
+from beherit.core.database import DatabaseManager
 from beherit.core.repository import AgentRepository
+from beherit.core.scheduler import AgentScheduler
 from beherit.engines.antigravity import AntigravityEngine
 from beherit.models.agent import AgentModel, EngineType
 
 router = APIRouter(prefix="/api/agents", tags=["agents"])
+history_router = APIRouter(prefix="/api/history", tags=["history"])
+
 repo = AgentRepository()
 auth_mgr = AgentAuthManager()
+db_mgr = DatabaseManager()
 antigravity_engine = AntigravityEngine(auth_manager=auth_mgr)
+scheduler = AgentScheduler(repository=repo, db_manager=db_mgr, engine=antigravity_engine)
 
 
 # Request schemas
@@ -212,6 +218,35 @@ async def disconnect_agent_auth(slug: str):
 
     auth_mgr.clear_session(slug)
     return {"status": "disconnected", "auth": auth_mgr.get_auth_details(slug)}
+
+
+# --- Background Scheduler & History Endpoints ---
+
+
+@router.get("/{slug}/history")
+async def get_agent_job_history(slug: str, limit: int = 50):
+    """Retrieve job execution audit history for this agent."""
+    agent = repo.load_agent(slug)
+    if not agent:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Agent not found.")
+    return {"history": db_mgr.get_agent_history(slug, limit=limit)}
+
+
+@router.post("/{slug}/run-now")
+async def trigger_agent_job_now(slug: str):
+    """Trigger an autonomous job run immediately on-demand and dispatch multi-channel reports."""
+    agent = repo.load_agent(slug)
+    if not agent:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Agent not found.")
+
+    result = await scheduler.execute_agent_job(slug)
+    return result
+
+
+@history_router.get("")
+async def get_recent_jobs_history(limit: int = 50):
+    """Retrieve global recent job execution history."""
+    return {"history": db_mgr.get_recent_history(limit=limit)}
 
 
 # --- Streaming SSE Chat Endpoint ---

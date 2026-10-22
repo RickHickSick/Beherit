@@ -1,5 +1,6 @@
 """FastAPI Application Entrypoint for Beherit Server."""
 
+from contextlib import asynccontextmanager
 from pathlib import Path
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -7,13 +8,23 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
 from beherit import __version__
-from beherit.api.routes import router as agents_router
+from beherit.api.routes import router as agents_router, history_router, scheduler
 from beherit.config import settings
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Lifecycle manager to cleanly start and stop background scheduler."""
+    scheduler.start()
+    yield
+    scheduler.shutdown()
+
 
 app = FastAPI(
     title="Beherit",
     description="Autonomous AI Agent Platform powered by Agent SDKs with per-agent subscription isolation.",
     version=__version__,
+    lifespan=lifespan,
 )
 
 # Setup CORS
@@ -26,6 +37,7 @@ app.add_middleware(
 )
 
 app.include_router(agents_router)
+app.include_router(history_router)
 
 # Static files directory
 STATIC_DIR = Path(__file__).parent / "static"

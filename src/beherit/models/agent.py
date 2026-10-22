@@ -46,10 +46,20 @@ class AgentCapabilities(BaseModel):
     database_read: bool = Field(default=False)
 
 
+class ScheduleReporting(BaseModel):
+    """Multi-channel reporting configuration for autonomous background tasks."""
+    sql_history: bool = Field(default=True, description="Save job execution to SQLite history")
+    markdown_report: bool = Field(default=True, description="Generate Markdown report in agent folder")
+    telegram_alert: bool = Field(default=False, description="Send notification to Telegram")
+    telegram_on_error_only: bool = Field(default=True, description="Only notify on failures or anomalies")
+
+
 class AgentSchedule(BaseModel):
     """Autonomous background execution schedule."""
     enabled: bool = Field(default=False)
     cron: Optional[str] = Field(default="0 8 * * *")
+    prompt: Optional[str] = Field(default=None, description="Optional custom prompt for scheduled turn")
+    reporting: ScheduleReporting = Field(default_factory=ScheduleReporting)
 
 
 class AgentModel(BaseModel):

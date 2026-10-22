@@ -52,6 +52,16 @@ class Settings(BaseSettings):
         description="Optional database URL for external database tools",
     )
 
+    # Optional Telegram Reporting Alerts
+    TELEGRAM_BOT_TOKEN: Union[str, None] = Field(
+        default=None,
+        description="Optional Telegram bot token for job alerts",
+    )
+    TELEGRAM_CHAT_ID: Union[str, None] = Field(
+        default=None,
+        description="Optional Telegram chat ID for job alerts",
+    )
+
     @property
     def agents_dir(self) -> Path:
         """Return the directory path where agent folders are stored."""
