@@ -29,7 +29,11 @@ class Settings(BaseSettings):
     # Storage Paths
     BEHERIT_DATA_DIR: Path = Field(
         default=Path("./data"),
-        description="Base path for data storage (agents, sqlite db, files)",
+        description="Base path for data storage (sqlite db, sessions)",
+    )
+    BEHERIT_AGENTS_DIR: Union[Path, None] = Field(
+        default=None,
+        description="Custom path for agents (e.g. Obsidian vault folder). If not set, defaults to BEHERIT_DATA_DIR / 'agents'",
     )
     BEHERIT_DB_PATH: Path = Field(
         default=Path("./data/beherit.db"),
@@ -51,7 +55,9 @@ class Settings(BaseSettings):
     @property
     def agents_dir(self) -> Path:
         """Return the directory path where agent folders are stored."""
-        return self.BEHERIT_DATA_DIR / "agents"
+        if self.BEHERIT_AGENTS_DIR:
+            return self.BEHERIT_AGENTS_DIR.resolve()
+        return (self.BEHERIT_DATA_DIR / "agents").resolve()
 
 
 settings = Settings()

@@ -3,6 +3,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from beherit import __version__
+from beherit.api.routes import router as agents_router
 from beherit.config import settings
 from beherit.core.repository import AgentRepository
 
@@ -21,7 +22,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-repo = AgentRepository()
+app.include_router(agents_router)
 
 
 @app.get("/health")
@@ -31,11 +32,5 @@ async def health_check():
         "status": "healthy",
         "version": __version__,
         "environment": settings.BEHERIT_ENV,
+        "agents_dir": str(settings.agents_dir),
     }
-
-
-@app.get("/api/agents")
-async def list_agents():
-    """List all registered agents."""
-    agents = repo.list_agents()
-    return {"agents": [a.model_dump(mode="json") for a in agents]}

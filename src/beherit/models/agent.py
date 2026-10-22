@@ -23,6 +23,9 @@ class AgentAuthConfig(BaseModel):
     provider: EngineType = Field(default=EngineType.ANTIGRAVITY)
     status: AuthStatus = Field(default=AuthStatus.UNAUTHENTICATED)
     profile_id: Optional[str] = Field(default=None)
+    auth_method: Optional[str] = Field(default="manual")
+    masked_token: Optional[str] = Field(default=None)
+    expires_at: Optional[float] = Field(default=None)
 
 
 class AgentCapabilities(BaseModel):
@@ -52,3 +55,8 @@ class AgentModel(BaseModel):
     schedule: AgentSchedule = Field(default_factory=AgentSchedule)
     master_prompt: str = Field(default="")
     instructions: Optional[str] = Field(default=None)
+    
+    # Metadata fields for runtime observation
+    file_path: Optional[str] = Field(default=None, description="Absolute path on disk to agent.md")
+    is_valid: bool = Field(default=True, description="False if file has syntax warnings or errors")
+    validation_error: Optional[str] = Field(default=None, description="Error details if invalid")
