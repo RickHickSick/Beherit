@@ -28,9 +28,19 @@ class AgentAuthConfig(BaseModel):
     expires_at: Optional[float] = Field(default=None)
 
 
+class TerminalMode(str, Enum):
+    DISABLED = "disabled"
+    RESTRICTED = "restricted"      # Workspace sandbox only
+    UNRESTRICTED = "unrestricted"  # Full unrestricted host shell execution
+
+
 class AgentCapabilities(BaseModel):
     """Execution permissions granted to an agent."""
     terminal: bool = Field(default=False)
+    terminal_mode: TerminalMode = Field(
+        default=TerminalMode.RESTRICTED,
+        description="Level of terminal access: disabled, restricted (workspace only), or unrestricted",
+    )
     file_read: bool = Field(default=True)
     file_write: bool = Field(default=False)
     database_read: bool = Field(default=False)

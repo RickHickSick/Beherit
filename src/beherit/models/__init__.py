@@ -5,6 +5,7 @@ from beherit.models.agent import (
     AgentSchedule,
     EngineType,
     AuthStatus,
+    TerminalMode,
 )
 
 __all__ = [
@@ -14,4 +15,5 @@ __all__ = [
     "AgentSchedule",
     "EngineType",
     "AuthStatus",
+    "TerminalMode",
 ]

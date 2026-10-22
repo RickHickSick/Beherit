@@ -1,0 +1,711 @@
+<!DOCTYPE html>
+<html lang="pl" class="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Beherit">
+  <meta name="theme-color" content="#0f172a">
+  <title>Beherit — Środowisko Agentów AI</title>
+  
+  <!-- Tailwind CSS & Alpine.js -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script defer src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js"></script>
+  
+  <!-- Marked for Markdown rendering in chat -->
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            brand: {
+              50: '#f0fdf4',
+              500: '#22c55e',
+              600: '#16a34a',
+              700: '#15803d',
+              900: '#14532d',
+            }
+          }
+        }
+      }
+    }
+  </script>
+
+  <style>
+    /* Safe area padding for mobile Safari */
+    body {
+      padding-top: env(safe-area-inset-top);
+      padding-bottom: env(safe-area-inset-bottom);
+      padding-left: env(safe-area-inset-left);
+      padding-right: env(safe-area-inset-right);
+      -webkit-font-smoothing: antialiased;
+    }
+    /* Prevent Safari auto-zoom on inputs */
+    input, textarea, select {
+      font-size: 16px !important;
+    }
+    .custom-scroll::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+    .custom-scroll::-webkit-scrollbar-thumb {
+      background: #334155;
+      border-radius: 3px;
+    }
+  </style>
+</head>
+<body class="bg-slate-950 text-slate-100 min-h-screen flex flex-col font-sans selection:bg-brand-500 selection:text-slate-950"
+      x-data="beheritApp()"
+      x-init="initApp()">
+
+  <!-- Top Navigation Bar -->
+  <header class="border-b border-slate-800 bg-slate-900/80 backdrop-blur sticky top-0 z-40 px-4 py-3 flex items-center justify-between">
+    <div class="flex items-center space-x-3">
+      <div class="w-9 h-9 rounded-xl bg-gradient-to-tr from-emerald-500 to-teal-400 flex items-center justify-center font-black text-slate-950 text-xl shadow-lg shadow-emerald-500/20">
+        🧿
+      </div>
+      <div>
+        <h1 class="font-bold text-lg leading-tight tracking-tight flex items-center gap-2">
+          Beherit <span class="text-xs px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 font-mono">v0.1.0</span>
+        </h1>
+        <p class="text-xs text-slate-400">Autonomiczne Środowisko Agentów AI</p>
+      </div>
+    </div>
+
+    <!-- Navigation Controls -->
+    <div class="flex items-center space-x-2">
+      <button @click="currentView = 'dashboard'" 
+              :class="currentView === 'dashboard' ? 'bg-slate-800 text-emerald-400 border-slate-700' : 'text-slate-400 hover:text-slate-200'"
+              class="px-3 py-1.5 rounded-lg text-sm font-medium border border-transparent transition">
+        Agenci
+      </button>
+      <button @click="currentView = 'chat'" 
+              :class="currentView === 'chat' ? 'bg-slate-800 text-emerald-400 border-slate-700' : 'text-slate-400 hover:text-slate-200'"
+              class="px-3 py-1.5 rounded-lg text-sm font-medium border border-transparent transition">
+        Czat
+      </button>
+      <button @click="openCreateModal = true"
+              class="bg-emerald-600 hover:bg-emerald-500 text-slate-950 font-semibold px-3 py-1.5 rounded-lg text-sm shadow-md shadow-emerald-600/20 transition flex items-center gap-1.5">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
+        <span>Nowy Agent</span>
+      </button>
+    </div>
+  </header>
+
+  <!-- Main View Container -->
+  <main class="flex-1 flex flex-col max-w-7xl w-full mx-auto p-4">
+
+    <!-- VIEW 1: AGENTS DASHBOARD -->
+    <section x-show="currentView === 'dashboard'" class="space-y-6">
+      <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 bg-slate-900/50 p-4 rounded-2xl border border-slate-800/80">
+        <div>
+          <h2 class="text-xl font-bold text-slate-100">Katalog Twoich Agentów</h2>
+          <p class="text-sm text-slate-400">Każdy agent działa na własnej, odizolowanej subskrypcji SDK.</p>
+        </div>
+        <div class="flex items-center gap-2">
+          <button @click="loadAgents()" class="text-xs text-slate-400 hover:text-slate-200 bg-slate-800 px-3 py-2 rounded-lg border border-slate-700/60 flex items-center gap-1 transition">
+            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg>
+            Odśwież
+          </button>
+        </div>
+      </div>
+
+      <!-- Agents Grid -->
+      <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        <template x-for="agent in agents" :key="agent.slug">
+          <div class="bg-slate-900 border border-slate-800 hover:border-slate-700 rounded-2xl p-5 flex flex-col justify-between transition group shadow-sm hover:shadow-emerald-950/20">
+            <div>
+              <!-- Header info -->
+              <div class="flex items-start justify-between gap-2 mb-3">
+                <div class="flex items-center gap-3">
+                  <div class="w-10 h-10 rounded-xl bg-slate-800 border border-slate-700 flex items-center justify-center text-lg">
+                    🤖
+                  </div>
+                  <div>
+                    <h3 class="font-bold text-base text-slate-100 group-hover:text-emerald-400 transition" x-text="agent.name"></h3>
+                    <p class="text-xs text-slate-400 font-mono" x-text="agent.slug"></p>
+                  </div>
+                </div>
+
+                <!-- Auth Status Badge -->
+                <span x-show="agent.auth.status === 'authenticated'" 
+                      class="px-2.5 py-0.5 rounded-full text-xs font-medium bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 flex items-center gap-1">
+                  <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span> Połączono
+                </span>
+                <span x-show="agent.auth.status !== 'authenticated'" 
+                      class="px-2.5 py-0.5 rounded-full text-xs font-medium bg-amber-500/10 text-amber-400 border border-amber-500/20 flex items-center gap-1">
+                  <span class="w-1.5 h-1.5 rounded-full bg-amber-400"></span> Brak SDK
+                </span>
+              </div>
+
+              <!-- Description -->
+              <p class="text-sm text-slate-300 line-clamp-2 mb-4" x-text="agent.description || 'Brak opisu agenta.'"></p>
+
+              <!-- Tags / Parameters -->
+              <div class="flex flex-wrap gap-1.5 text-xs text-slate-400 mb-4">
+                <span class="bg-slate-800/80 px-2 py-1 rounded-md border border-slate-700/50 flex items-center gap-1">
+                  ⚡ <span x-text="agent.engine"></span>
+                </span>
+                <span class="bg-slate-800/80 px-2 py-1 rounded-md border border-slate-700/50 flex items-center gap-1">
+                  🧠 <span x-text="agent.model"></span>
+                </span>
+                <span class="bg-slate-800/80 px-2 py-1 rounded-md border border-slate-700/50">
+                  Terminal: 
+                  <strong :class="agent.capabilities.terminal_mode === 'unrestricted' ? 'text-amber-400' : 'text-slate-300'"
+                          x-text="agent.capabilities.terminal_mode === 'unrestricted' ? 'Swobodny' : (agent.capabilities.terminal ? 'Piaskownica' : 'Wyłączony')"></strong>
+                </span>
+              </div>
+            </div>
+
+            <!-- Card Actions -->
+            <div class="pt-4 border-t border-slate-800/80 flex items-center justify-between gap-2">
+              <button @click="openAuthModalFor(agent)" 
+                      class="text-xs bg-slate-800 hover:bg-slate-700 text-slate-300 font-medium px-3 py-2 rounded-xl transition flex items-center gap-1.5">
+                <svg class="w-3.5 h-3.5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z"></path></svg>
+                Subskrypcja
+              </button>
+
+              <button @click="selectAgentForChat(agent)" 
+                      class="text-xs bg-emerald-600 hover:bg-emerald-500 text-slate-950 font-bold px-4 py-2 rounded-xl transition flex items-center gap-1.5">
+                <span>Czatuj</span>
+                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3"></path></svg>
+              </button>
+            </div>
+          </div>
+        </template>
+      </div>
+    </section>
+
+    <!-- VIEW 2: INTERACTIVE LIVE CHAT -->
+    <section x-show="currentView === 'chat'" class="flex-1 flex flex-col bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden shadow-xl">
+      <!-- Chat Header -->
+      <div class="px-5 py-3.5 border-b border-slate-800 bg-slate-900/90 backdrop-blur flex items-center justify-between">
+        <div class="flex items-center space-x-3">
+          <div class="w-9 h-9 rounded-xl bg-slate-800 border border-slate-700 flex items-center justify-center text-lg">
+            🤖
+          </div>
+          <div>
+            <div class="flex items-center gap-2">
+              <h2 class="font-bold text-base text-slate-100" x-text="activeAgent ? activeAgent.name : 'Wybierz agenta'"></h2>
+              <span x-show="activeAgent && activeAgent.auth.status === 'authenticated'" 
+                    class="w-2 h-2 rounded-full bg-emerald-400"></span>
+            </div>
+            <p class="text-xs text-slate-400" x-text="activeAgent ? `${activeAgent.engine} (${activeAgent.model})` : 'Brak aktywnego agenta'"></p>
+          </div>
+        </div>
+
+        <div class="flex items-center gap-2">
+          <select x-model="selectedAgentSlug" @change="switchActiveAgent()" class="bg-slate-800 text-slate-200 text-xs px-3 py-1.5 rounded-lg border border-slate-700 outline-none">
+            <template x-for="agent in agents" :key="agent.slug">
+              <option :value="agent.slug" x-text="agent.name"></option>
+            </template>
+          </select>
+        </div>
+      </div>
+
+      <!-- Messages Window -->
+      <div class="flex-1 overflow-y-auto p-4 space-y-4 custom-scroll" id="chat-messages-container">
+        <template x-if="chatMessages.length === 0">
+          <div class="h-full flex flex-col items-center justify-center text-center p-6 text-slate-500">
+            <div class="text-4xl mb-2">💬</div>
+            <p class="text-sm font-medium">Brak wiadomości w tej sesji.</p>
+            <p class="text-xs text-slate-400 max-w-sm mt-1">Napisz do agenta prompt lub użyj szybkich poleceń poniżej.</p>
+          </div>
+        </template>
+
+        <template x-for="(msg, idx) in chatMessages" :key="idx">
+          <div :class="msg.role === 'user' ? 'justify-end' : 'justify-start'" class="flex items-start gap-3">
+            <div x-show="msg.role !== 'user'" class="w-8 h-8 rounded-lg bg-slate-800 border border-slate-700 flex items-center justify-center text-sm shrink-0">
+              🤖
+            </div>
+
+            <div :class="msg.role === 'user' ? 'bg-emerald-600 text-slate-950 font-medium' : 'bg-slate-800/80 text-slate-100 border border-slate-700/60'"
+                 class="max-w-[85%] sm:max-w-xl rounded-2xl p-4 shadow-sm space-y-2">
+              
+              <!-- Thought Process Accordion (for assistant) -->
+              <template x-if="msg.thoughts && msg.thoughts.length > 0">
+                <div x-data="{ open: false }" class="border-b border-slate-700/60 pb-2 mb-2">
+                  <button @click="open = !open" class="text-xs text-emerald-400 hover:text-emerald-300 font-mono flex items-center gap-1 transition">
+                    <span x-text="open ? '▼ Ukryj tok myślenia' : '▶ Zobacz tok myślenia'"></span>
+                  </button>
+                  <div x-show="open" class="mt-2 text-xs text-slate-400 font-mono bg-slate-950/60 p-2.5 rounded-lg whitespace-pre-wrap border border-slate-800"
+                       x-text="msg.thoughts.join('\n')"></div>
+                </div>
+              </template>
+
+              <!-- Main message text -->
+              <div class="text-sm leading-relaxed prose prose-invert max-w-none" 
+                   x-html="renderMarkdown(msg.content)"></div>
+            </div>
+
+            <div x-show="msg.role === 'user'" class="w-8 h-8 rounded-lg bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 flex items-center justify-center text-sm shrink-0 font-bold">
+              Ty
+            </div>
+          </div>
+        </template>
+
+        <!-- Streaming Indicator -->
+        <div x-show="isStreaming" class="flex items-center gap-2 text-xs text-emerald-400 font-mono animate-pulse">
+          <span>● Agent generuje odpowiedź...</span>
+        </div>
+      </div>
+
+      <!-- Quick Prompts Bar -->
+      <div class="px-4 py-2 border-t border-slate-800/60 bg-slate-900/60 flex items-center gap-2 overflow-x-auto text-xs text-slate-300 custom-scroll">
+        <span class="text-slate-500 text-[11px] shrink-0">Szybkie:</span>
+        <button @click="quickPrompt('Przeanalizuj fixingi walut i anomalie z dzisiejszego dnia.')" class="bg-slate-800 hover:bg-slate-700 px-2.5 py-1 rounded-md shrink-0 border border-slate-700/50 transition">Audyt Walut</button>
+        <button @click="quickPrompt('Wykonaj polecenie sprawdzające stan dysku i bazy danych.')" class="bg-slate-800 hover:bg-slate-700 px-2.5 py-1 rounded-md shrink-0 border border-slate-700/50 transition">Sprawdź Host</button>
+        <button @click="quickPrompt('Wypisz pliki w twoim katalogu roboczym.')" class="bg-slate-800 hover:bg-slate-700 px-2.5 py-1 rounded-md shrink-0 border border-slate-700/50 transition">Lista Plików</button>
+      </div>
+
+      <!-- Chat Input Area -->
+      <div class="p-3 bg-slate-950/80 border-t border-slate-800 flex items-center gap-2">
+        <textarea x-model="chatInput" 
+                  @keydown.enter.prevent="if(!$event.shiftKey) sendChatMessage()"
+                  placeholder="Napisz do agenta..." 
+                  rows="1" 
+                  class="flex-1 bg-slate-900 text-slate-100 placeholder-slate-500 text-sm px-4 py-3 rounded-xl border border-slate-800 focus:border-emerald-500 outline-none resize-none transition"></textarea>
+        
+        <button @click="sendChatMessage()" 
+                :disabled="isStreaming || !chatInput.trim()"
+                class="bg-emerald-600 hover:bg-emerald-500 disabled:opacity-40 text-slate-950 font-bold p-3 rounded-xl transition shrink-0 shadow-md shadow-emerald-600/20">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"></path></svg>
+        </button>
+      </div>
+    </section>
+  </main>
+
+  <!-- MODAL: KREATOR NOWEGO AGENTA -->
+  <div x-show="openCreateModal" class="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4" style="display: none;">
+    <div @click.away="openCreateModal = false" class="bg-slate-900 border border-slate-800 w-full max-w-xl rounded-2xl p-6 shadow-2xl space-y-4 max-h-[90vh] overflow-y-auto custom-scroll">
+      <div class="flex items-center justify-between border-b border-slate-800 pb-3">
+        <h3 class="text-lg font-bold text-slate-100 flex items-center gap-2">
+          <span>✨</span> Nowy Agent Beherit
+        </h3>
+        <button @click="openCreateModal = false" class="text-slate-400 hover:text-slate-200">✕</button>
+      </div>
+
+      <div class="space-y-4 text-sm">
+        <div>
+          <label class="block text-xs font-semibold text-slate-300 mb-1">Nazwa Agenta</label>
+          <input type="text" x-model="newAgent.name" @input="newAgent.slug = generateSlug(newAgent.name)" placeholder="np. Analityk Rynków Finansowych" class="w-full bg-slate-800 text-slate-100 px-3.5 py-2.5 rounded-xl border border-slate-700 outline-none focus:border-emerald-500">
+        </div>
+
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block text-xs font-semibold text-slate-300 mb-1">Slug (Folder)</label>
+            <input type="text" x-model="newAgent.slug" placeholder="analityk-rynkow" class="w-full bg-slate-800 text-slate-100 px-3.5 py-2.5 rounded-xl border border-slate-700 outline-none font-mono text-xs">
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-slate-300 mb-1">Silnik SDK</label>
+            <select x-model="newAgent.engine" class="w-full bg-slate-800 text-slate-100 px-3.5 py-2.5 rounded-xl border border-slate-700 outline-none">
+              <option value="antigravity">Google Antigravity SDK</option>
+              <option value="claude-code">Claude Code SDK</option>
+              <option value="codex">OpenAI Codex</option>
+            </select>
+          </div>
+        </div>
+
+        <div>
+          <label class="block text-xs font-semibold text-slate-300 mb-1">Model Silnika</label>
+          <input type="text" x-model="newAgent.model" class="w-full bg-slate-800 text-slate-100 px-3.5 py-2.5 rounded-xl border border-slate-700 outline-none font-mono text-xs">
+        </div>
+
+        <!-- Terminal Mode Selection (User Decision) -->
+        <div>
+          <label class="block text-xs font-semibold text-slate-300 mb-1">Poziom Uprawnień Terminala (Bash)</label>
+          <select x-model="newAgent.terminal_mode" class="w-full bg-slate-800 text-slate-100 px-3.5 py-2.5 rounded-xl border border-slate-700 outline-none">
+            <option value="restricted">Piaskownica (Tylko katalog roboczy agenta)</option>
+            <option value="unrestricted">Pełna swoboda (Brak ograniczeń ścieżek na hoście)</option>
+            <option value="disabled">Wyłączony (Brak dostępu do terminala)</option>
+          </select>
+        </div>
+
+        <div>
+          <label class="block text-xs font-semibold text-slate-300 mb-1">Master Prompt (Główna Rola Agenta)</label>
+          <textarea x-model="newAgent.master_prompt" rows="3" placeholder="Zdefiniuj cel i zachowanie agenta..." class="w-full bg-slate-800 text-slate-100 px-3.5 py-2.5 rounded-xl border border-slate-700 outline-none text-xs focus:border-emerald-500"></textarea>
+        </div>
+
+        <div>
+          <label class="block text-xs font-semibold text-slate-300 mb-1">Wytyczne operacyjne (instructions.md)</label>
+          <textarea x-model="newAgent.instructions" rows="2" placeholder="Konkretne zasady i procedury..." class="w-full bg-slate-800 text-slate-100 px-3.5 py-2.5 rounded-xl border border-slate-700 outline-none text-xs focus:border-emerald-500"></textarea>
+        </div>
+      </div>
+
+      <div class="pt-3 border-t border-slate-800 flex justify-end gap-2">
+        <button @click="openCreateModal = false" class="px-4 py-2 rounded-xl text-slate-400 hover:text-slate-200 text-xs">Anuluj</button>
+        <button @click="submitCreateAgent()" class="bg-emerald-600 hover:bg-emerald-500 text-slate-950 font-bold px-5 py-2 rounded-xl text-xs transition">Utwórz Agenta</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: ZARZĄDZANIE SUBSKRYPCJĄ I LOGOWANIE SDK -->
+  <div x-show="openAuthModal" class="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4" style="display: none;">
+    <div @click.away="openAuthModal = false" class="bg-slate-900 border border-slate-800 w-full max-w-lg rounded-2xl p-6 shadow-2xl space-y-4">
+      <div class="flex items-center justify-between border-b border-slate-800 pb-3">
+        <div>
+          <h3 class="text-base font-bold text-slate-100 flex items-center gap-2">
+            <span>🔑</span> Subskrypcja SDK: <span class="text-emerald-400" x-text="authTargetAgent ? authTargetAgent.name : ''"></span>
+          </h3>
+          <p class="text-xs text-slate-400">Podłącz tego agenta niezależnie do swojego konta.</p>
+        </div>
+        <button @click="openAuthModal = false" class="text-slate-400 hover:text-slate-200">✕</button>
+      </div>
+
+      <!-- Current Status Card -->
+      <div class="p-3.5 rounded-xl bg-slate-950 border border-slate-800 flex items-center justify-between">
+        <div>
+          <p class="text-xs text-slate-400">Stan uwierzytelnienia:</p>
+          <p class="text-sm font-bold" 
+             :class="authStatusDetails && authStatusDetails.authenticated ? 'text-emerald-400' : 'text-amber-400'"
+             x-text="authStatusDetails && authStatusDetails.authenticated ? 'Połączono z subskrypcją' : 'Wymaga zalogowania'"></p>
+        </div>
+        <div x-show="authStatusDetails && authStatusDetails.masked_token" class="text-right">
+          <p class="text-xs text-slate-400">Token profilu:</p>
+          <code class="text-xs text-slate-300 font-mono" x-text="authStatusDetails.masked_token"></code>
+        </div>
+      </div>
+
+      <!-- Auth Method Selector Tabs -->
+      <div class="flex border-b border-slate-800 text-xs">
+        <button @click="authTab = 'auto'" 
+                :class="authTab === 'auto' ? 'border-b-2 border-emerald-500 text-emerald-400 font-bold' : 'text-slate-400 hover:text-slate-200'"
+                class="pb-2 px-3 transition">
+          Automatyczne Logowanie (OAuth)
+        </button>
+        <button @click="authTab = 'manual'" 
+                :class="authTab === 'manual' ? 'border-b-2 border-emerald-500 text-emerald-400 font-bold' : 'text-slate-400 hover:text-slate-200'"
+                class="pb-2 px-3 transition">
+          Ręczne Wklejenie Tokena
+        </button>
+      </div>
+
+      <!-- TAB 1: AUTOMATIC OAUTH / DEVICE CODE -->
+      <div x-show="authTab === 'auto'" class="space-y-3 text-xs">
+        <p class="text-slate-300 leading-relaxed">
+          Kliknij poniżej, aby wygenerować sesję autoryzacyjną dla tego agenta. Otrzymasz link do zatwierdzenia w przeglądarce.
+        </p>
+
+        <template x-if="!activeOAuthFlow">
+          <button @click="startOAuthFlow()" class="w-full bg-slate-800 hover:bg-slate-700 text-slate-100 font-bold py-2.5 rounded-xl border border-slate-700 transition flex items-center justify-center gap-2">
+            <span>🌐 Rozpocznij połączenie z Google Antigravity</span>
+          </button>
+        </template>
+
+        <template x-if="activeOAuthFlow">
+          <div class="bg-slate-950 p-4 rounded-xl border border-emerald-500/30 space-y-3">
+            <p class="text-slate-200">1. Otwórz w nowej karcie link logowania:</p>
+            <a :href="activeOAuthFlow.verification_url" target="_blank" class="block text-emerald-400 font-mono underline break-all bg-slate-900 p-2 rounded border border-slate-800" x-text="activeOAuthFlow.verification_url"></a>
+            
+            <p class="text-slate-200">2. Wprowadź kod weryfikacyjny lub zatwierdź:</p>
+            <div class="bg-slate-900 p-2.5 rounded border border-slate-800 text-center">
+              <strong class="text-base text-emerald-400 font-mono tracking-wider" x-text="activeOAuthFlow.user_code"></strong>
+            </div>
+
+            <div class="flex gap-2">
+              <input type="text" x-model="authCodeInput" placeholder="Wklej kod powrotny / token..." class="flex-1 bg-slate-800 text-slate-100 px-3 py-2 rounded-lg border border-slate-700 outline-none font-mono">
+              <button @click="verifyOAuthCode()" class="bg-emerald-600 hover:bg-emerald-500 text-slate-950 font-bold px-4 py-2 rounded-lg transition">Zatwierdź</button>
+            </div>
+          </div>
+        </template>
+      </div>
+
+      <!-- TAB 2: MANUAL TOKEN PASTE -->
+      <div x-show="authTab === 'manual'" class="space-y-3 text-xs">
+        <p class="text-slate-300">
+          Wklej token sesji subskrypcji SDK dla tego agenta. Zostanie on zapisany w odizolowanym pliku <code>.auth/session.json</code> z uprawnieniami <code>0600</code>.
+        </p>
+        <textarea x-model="manualTokenInput" rows="3" placeholder="Wklej token sesji SDK..." class="w-full bg-slate-800 text-slate-100 p-3 rounded-xl border border-slate-700 font-mono text-xs outline-none focus:border-emerald-500"></textarea>
+        
+        <button @click="saveManualToken()" class="w-full bg-emerald-600 hover:bg-emerald-500 text-slate-950 font-bold py-2.5 rounded-xl transition">
+          Zapisz Token dla Agenta
+        </button>
+      </div>
+
+      <!-- Disconnect Option -->
+      <div x-show="authStatusDetails && authStatusDetails.authenticated" class="pt-3 border-t border-slate-800 flex justify-between items-center text-xs">
+        <span class="text-slate-400">Chcesz usunąć poświadczenia?</span>
+        <button @click="disconnectAgentAuth()" class="text-red-400 hover:text-red-300 font-semibold transition">Rozłącz Subskrypcję</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    function beheritApp() {
+      return {
+        currentView: 'dashboard',
+        agents: [],
+        activeAgent: null,
+        selectedAgentSlug: '',
+        
+        // Chat
+        chatMessages: [],
+        chatInput: '',
+        isStreaming: false,
+
+        // Create Modal
+        openCreateModal: false,
+        newAgent: {
+          name: '',
+          slug: '',
+          engine: 'antigravity',
+          model: 'gemini-3.8-flash',
+          terminal_mode: 'restricted',
+          master_prompt: 'Jesteś autonomicznym analitykiem AI.',
+          instructions: 'Zawsze odpowiadaj zwięźle i precyzyjnie.'
+        },
+
+        // Auth Modal
+        openAuthModal: false,
+        authTargetAgent: null,
+        authStatusDetails: null,
+        authTab: 'auto',
+        activeOAuthFlow: null,
+        authCodeInput: '',
+        manualTokenInput: '',
+
+        async initApp() {
+          await this.loadAgents();
+          if (this.agents.length > 0) {
+            this.selectAgentForChat(this.agents[0]);
+          }
+        },
+
+        async loadAgents() {
+          try {
+            const res = await fetch('/api/agents');
+            const data = await res.json();
+            this.agents = data.agents || [];
+          } catch (e) {
+            console.error('Błąd ładowania agentów:', e);
+          }
+        },
+
+        generateSlug(name) {
+          return name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
+        },
+
+        selectAgentForChat(agent) {
+          this.activeAgent = agent;
+          this.selectedAgentSlug = agent.slug;
+          this.currentView = 'chat';
+          this.chatMessages = [];
+        },
+
+        switchActiveAgent() {
+          const found = this.agents.find(a => a.slug === this.selectedAgentSlug);
+          if (found) {
+            this.selectAgentForChat(found);
+          }
+        },
+
+        quickPrompt(text) {
+          this.chatInput = text;
+          this.sendChatMessage();
+        },
+
+        async sendChatMessage() {
+          if (!this.chatInput.trim() || !this.activeAgent || this.isStreaming) return;
+          const userMsg = this.chatInput.trim();
+          this.chatInput = '';
+          this.chatMessages.push({ role: 'user', content: userMsg });
+
+          const assistantMsgIdx = this.chatMessages.push({
+            role: 'assistant',
+            content: '',
+            thoughts: []
+          }) - 1;
+
+          this.isStreaming = true;
+          this.scrollToBottom();
+
+          try {
+            const response = await fetch(`/api/agents/${this.activeAgent.slug}/chat`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ message: userMsg })
+            });
+
+            const reader = response.body.getReader();
+            const decoder = new TextDecoder();
+            let buffer = '';
+
+            while (true) {
+              const { done, value } = await reader.read();
+              if (done) break;
+
+              buffer += decoder.decode(value, { stream: true });
+              const lines = buffer.split('\n');
+              buffer = lines.pop(); // keep last partial line
+
+              for (const line of lines) {
+                if (line.startsWith('data: ')) {
+                  try {
+                    const rawData = line.slice(6).trim();
+                    const parsed = JSON.parse(rawData);
+
+                    if (typeof parsed === 'object' && parsed.error) {
+                      this.chatMessages[assistantMsgIdx].content += `\n\n> ⚠️ **Błąd:** ${parsed.error}`;
+                    } else if (typeof parsed === 'string') {
+                      this.chatMessages[assistantMsgIdx].content += parsed;
+                    }
+                    this.scrollToBottom();
+                  } catch (err) {
+                    // Raw string payload
+                    const raw = line.slice(6);
+                    if (raw) this.chatMessages[assistantMsgIdx].content += raw;
+                  }
+                } else if (line.startsWith('event: thought')) {
+                  // Capture thoughts in accordion
+                  this.chatMessages[assistantMsgIdx].thoughts.push('Analiza kontekstu...');
+                }
+              }
+            }
+          } catch (err) {
+            this.chatMessages[assistantMsgIdx].content += `\n\n> ⚠️ Błąd połączenia: ${err.message}`;
+          } finally {
+            this.isStreaming = false;
+            this.scrollToBottom();
+          }
+        },
+
+        scrollToBottom() {
+          this.$nextTick(() => {
+            const c = document.getElementById('chat-messages-container');
+            if (c) c.scrollTop = c.scrollHeight;
+          });
+        },
+
+        renderMarkdown(text) {
+          if (!text) return '';
+          try {
+            return marked.parse(text);
+          } catch {
+            return text;
+          }
+        },
+
+        async submitCreateAgent() {
+          try {
+            const res = await fetch('/api/agents', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(this.newAgent)
+            });
+
+            if (res.ok) {
+              this.openCreateModal = false;
+              await this.loadAgents();
+              const created = this.agents.find(a => a.slug === this.newAgent.slug);
+              if (created) this.selectAgentForChat(created);
+            } else {
+              const err = await res.json();
+              alert(`Błąd tworzenia: ${err.detail || 'Nieznany błąd'}`);
+            }
+          } catch (e) {
+            alert(`Błąd sieci: ${e.message}`);
+          }
+        },
+
+        async openAuthModalFor(agent) {
+          this.authTargetAgent = agent;
+          this.activeOAuthFlow = null;
+          this.manualTokenInput = '';
+          this.authCodeInput = '';
+          this.openAuthModal = true;
+          await this.refreshAuthDetails();
+        },
+
+        async refreshAuthDetails() {
+          if (!this.authTargetAgent) return;
+          try {
+            const res = await fetch(`/api/agents/${this.authTargetAgent.slug}/auth/status`);
+            this.authStatusDetails = await res.json();
+          } catch (e) {
+            console.error(e);
+          }
+        },
+
+        async startOAuthFlow() {
+          try {
+            const res = await fetch(`/api/agents/${this.authTargetAgent.slug}/auth/start`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ provider: this.authTargetAgent.engine })
+            });
+            this.activeOAuthFlow = await res.json();
+          } catch (e) {
+            alert(`Błąd startu logowania: ${e.message}`);
+          }
+        },
+
+        async verifyOAuthCode() {
+          try {
+            const res = await fetch(`/api/agents/${this.authTargetAgent.slug}/auth/verify`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                flow_id: this.activeOAuthFlow.flow_id,
+                auth_code: this.authCodeInput
+              })
+            });
+            if (res.ok) {
+              await this.refreshAuthDetails();
+              await this.loadAgents();
+              this.activeOAuthFlow = null;
+              this.authCodeInput = '';
+            } else {
+              const err = await res.json();
+              alert(err.detail || 'Błąd autoryzacji');
+            }
+          } catch (e) {
+            alert(e.message);
+          }
+        },
+
+        async saveManualToken() {
+          try {
+            const res = await fetch(`/api/agents/${this.authTargetAgent.slug}/auth/manual`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                token: this.manualTokenInput,
+                provider: this.authTargetAgent.engine
+              })
+            });
+            if (res.ok) {
+              await this.refreshAuthDetails();
+              await this.loadAgents();
+              this.manualTokenInput = '';
+            } else {
+              const err = await res.json();
+              alert(err.detail || 'Błąd zapisu tokena');
+            }
+          } catch (e) {
+            alert(e.message);
+          }
+        },
+
+        async disconnectAgentAuth() {
+          if (!confirm('Czy na pewno chcesz rozłączyć subskrypcję tego agenta?')) return;
+          try {
+            const res = await fetch(`/api/agents/${this.authTargetAgent.slug}/auth/disconnect`, {
+              method: 'POST'
+            });
+            if (res.ok) {
+              await this.refreshAuthDetails();
+              await this.loadAgents();
+            }
+          } catch (e) {
+            alert(e.message);
+          }
+        }
+      }
+    }
+  </script>
+</body>
+</html>

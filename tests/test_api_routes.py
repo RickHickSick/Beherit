@@ -17,6 +17,13 @@ def test_health_endpoint():
     assert "version" in data
 
 
+def test_root_index_html():
+    """Verify that root index serves the web UI."""
+    response = client.get("/")
+    assert response.status_code == 200
+    assert "Beherit" in response.text
+
+
 def test_agent_creation_and_auth_flow(tmp_path: Path, monkeypatch):
     """Test full agent creation, manual auth, and disconnect flow."""
     monkeypatch.setattr(repo, "base_dir", tmp_path)
