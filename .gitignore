@@ -1,0 +1,70 @@
+# Environment & Secrets (CRITICAL - ZERO LEAK)
+.env
+.env.*
+!.env.example
+*.key
+*.pem
+*.token
+
+# Agent Sessions & Authentication Profiles (PER-AGENT ISOLATION)
+.auth/
+**/.auth/
+*.session
+session.json
+tokens.json
+credentials/
+**/credentials/
+
+# Runtime Data & Storage
+data/*
+!data/agents/
+data/agents/*
+!data/agents/.gitkeep
+!data/agents/template-agent/
+data/agents/template-agent/.auth/
+*.db
+*.sqlite
+*.sqlite3
+logs/
+*.log
+
+# Python & Virtual Environments
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+.venv/
+ENV/
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Testing & Coverage
+.pytest_cache/
+.coverage
+htmlcov/
+.mypy_cache/
+.ruff_cache/
+
+# IDE & OS
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db

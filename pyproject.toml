@@ -1,0 +1,63 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "beherit"
+version = "0.1.0"
+description = "Autonomous AI Agent Management Platform powered by Agent SDKs with per-agent subscription isolation."
+readme = "README.md"
+authors = [
+    { name = "Łukasz Zabielski", email = "l.zabielski.93@gmail.com" }
+]
+license = { text = "MIT" }
+requires-python = ">=3.11"
+keywords = ["ai-agents", "agent-sdk", "antigravity", "claude-code", "codex", "fastapi"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Software Development :: Libraries :: Application Frameworks",
+]
+dependencies = [
+    "fastapi>=0.110.0",
+    "uvicorn[standard]>=0.28.0",
+    "pydantic>=2.6.0",
+    "pydantic-settings>=2.2.0",
+    "python-frontmatter>=1.1.0",
+    "apscheduler>=3.10.4",
+    "sse-starlette>=2.0.0",
+    "jinja2>=3.1.3",
+    "python-multipart>=0.0.9",
+    "cryptography>=42.0.0",
+    "httpx>=0.27.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.1.0",
+    "pytest-asyncio>=0.23.5",
+    "pytest-cov>=4.1.0",
+    "ruff>=0.3.0",
+    "mypy>=1.9.0",
+]
+
+[project.scripts]
+beherit = "beherit.cli:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/beherit"]
+
+[tool.pytest.ini_options]
+minversion = "8.0"
+testpaths = ["tests"]
+pythonpath = ["src"]
+asyncio_mode = "auto"
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+src = ["src", "tests"]

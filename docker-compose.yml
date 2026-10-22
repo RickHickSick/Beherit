@@ -1,0 +1,17 @@
+version: '3.8'
+
+services:
+  beherit:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: beherit-app
+    restart: unless-stopped
+    ports:
+      - "${BEHERIT_PORT:-8650}:${BEHERIT_PORT:-8650}"
+    env_file:
+      - .env
+    volumes:
+      - ./data:/app/data
+    environment:
+      - PYTHONUNBUFFERED=1
