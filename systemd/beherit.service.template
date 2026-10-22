@@ -1,0 +1,16 @@
+[Unit]
+Description=Beherit - Autonomous AI Agent Management Platform
+After=network.target
+
+[Service]
+Type=simple
+User=%USER%
+WorkingDirectory=%BEHERIT_DIR%
+Environment="PATH=%BEHERIT_DIR%/.venv/bin:/usr/local/bin:/usr/bin:/bin"
+EnvironmentFile=%BEHERIT_DIR%/.env
+ExecStart=%BEHERIT_DIR%/.venv/bin/uvicorn beherit.main:app --host ${BEHERIT_HOST} --port ${BEHERIT_PORT}
+Restart=always
+RestartSec=5s
+
+[Install]
+WantedBy=multi-user.target
