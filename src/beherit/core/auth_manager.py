@@ -243,11 +243,11 @@ class AgentAuthManager:
 
             return self.save_manual_token(agent_slug, token=token, provider=EngineType.ANTIGRAVITY)
 
-        elif provider == EngineType.OPENAI_CODEX:
+        elif provider == EngineType.CODEX:
             token = os.environ.get("OPENAI_API_KEY")
             if not token:
                 raise ValueError("Zmienna OPENAI_API_KEY nie jest ustawiona w środowisku serwera.")
-            return self.save_manual_token(agent_slug, token=token, provider=EngineType.OPENAI_CODEX)
+            return self.save_manual_token(agent_slug, token=token, provider=EngineType.CODEX)
 
         raise ValueError(f"Nieobsługiwany dostawca do importu: {provider}")
 
@@ -382,7 +382,7 @@ class AgentAuthManager:
             warning = "Brak skonfigurowanego GOOGLE_OAUTH_CLIENT_ID w .env serwera. Wygenerowano kod demonstracyjny. Dla homelab rekomendowane jest wklejenie tokena w 'Ręczne Wklejenie Tokena' lub użycie 'Import z serwera'."
         elif provider == EngineType.CLAUDE_CODE:
             warning = "Anthropic Claude Code nie posiada publicznego protokołu RFC 8628 Device Flow. Skorzystaj z 'Import sesji z serwera' lub wklej klucz w 'Ręczne Wklejenie Tokena'."
-        elif provider == EngineType.OPENAI_CODEX:
+        elif provider == EngineType.CODEX:
             warning = "OpenAI nie udostępnia publicznego protokołu Device Flow dla subskrypcji. Wklej klucz API w 'Ręczne Wklejenie Tokena'."
 
         # Save pending RFC 8628 flow state

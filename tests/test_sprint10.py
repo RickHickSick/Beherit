@@ -31,8 +31,8 @@ def test_beh030_multi_provider_flow_metadata(tmp_path: Path):
     assert "Device Flow" in flow_cl["warning"]
 
     # 3. OpenAI Codex flow
-    flow_cx = mgr.start_oauth_flow(slug, provider=EngineType.OPENAI_CODEX)
-    assert flow_cx["provider"] == EngineType.OPENAI_CODEX
+    flow_cx = mgr.start_oauth_flow(slug, provider=EngineType.CODEX)
+    assert flow_cx["provider"] == EngineType.CODEX
     assert "openai.com" in flow_cx["verification_uri"]
     assert flow_cx["oauth_configured"] is False
 
