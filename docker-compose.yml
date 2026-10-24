@@ -18,6 +18,7 @@ services:
       - BEHERIT_SECRET_KEY=${BEHERIT_SECRET_KEY:-}
     volumes:
       - ./data:/app/data
+      - ~/.claude:/root/.claude:ro
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8650/api/health"]
       interval: 30s
