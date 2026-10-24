@@ -164,6 +164,14 @@ class DatabaseManager:
             conn.commit()
             return cursor.rowcount > 0
 
+    def delete_agent_data(self, agent_slug: str) -> None:
+        """Clean up all job history, chat sessions, and messages for an agent."""
+        with self._get_connection() as conn:
+            conn.execute("DELETE FROM chat_messages WHERE agent_slug = ?", (agent_slug,))
+            conn.execute("DELETE FROM chat_sessions WHERE agent_slug = ?", (agent_slug,))
+            conn.execute("DELETE FROM job_history WHERE agent_slug = ?", (agent_slug,))
+            conn.commit()
+
     def record_job(
         self,
         agent_slug: str,

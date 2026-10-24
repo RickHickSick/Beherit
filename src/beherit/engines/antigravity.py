@@ -115,6 +115,7 @@ class AntigravityEngine(BaseAgentEngine):
                 full_turn_prompt,
             ]
 
+            process = None
             try:
                 process = await asyncio.create_subprocess_exec(
                     *cmd,
@@ -164,6 +165,16 @@ class AntigravityEngine(BaseAgentEngine):
 
             except Exception as e:
                 yield {"event": "error", "data": {"error": str(e)}}
+            finally:
+                if process is not None and process.returncode is None:
+                    try:
+                        process.terminate()
+                        await asyncio.wait_for(process.wait(), timeout=1.0)
+                    except Exception:
+                        try:
+                            process.kill()
+                        except Exception:
+                            pass
 
         else:
             # Fallback simulator for unit tests or environments without agy binary

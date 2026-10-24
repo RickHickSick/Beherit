@@ -278,6 +278,18 @@
         </div>
 
         <div class="flex items-center gap-2">
+          <!-- Session Selector -->
+          <div class="flex items-center gap-1.5 bg-slate-800 px-2.5 py-1.5 rounded-lg border border-slate-700">
+            <span class="text-[11px] text-slate-400">Wątek:</span>
+            <select x-model="activeSessionId" @change="loadSessionMessages(activeSessionId)" class="bg-transparent text-emerald-400 font-medium text-xs outline-none max-w-[120px] sm:max-w-[180px] truncate cursor-pointer">
+              <option value="" class="bg-slate-900 text-slate-200">＋ Nowa rozmowa</option>
+              <template x-for="sess in agentSessions" :key="sess.id">
+                <option :value="sess.id" class="bg-slate-900 text-slate-200" x-text="sess.title || sess.id"></option>
+              </template>
+            </select>
+          </div>
+
+          <!-- Agent Selector -->
           <select x-model="selectedAgentSlug" @change="switchActiveAgent()" class="bg-slate-800 text-slate-200 text-xs px-3 py-1.5 rounded-lg border border-slate-700 outline-none">
             <template x-for="agent in agents" :key="agent.slug">
               <option :value="agent.slug" x-text="agent.name"></option>
@@ -763,6 +775,8 @@
         currentReportContent: '',
         
         // Chat
+        activeSessionId: '',
+        agentSessions: [],
         chatMessages: [],
         chatInput: '',
         isStreaming: false,
@@ -931,17 +945,59 @@
           return name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
         },
 
-        selectAgentForChat(agent) {
+        async selectAgentForChat(agent) {
           this.haptic();
           this.activeAgent = agent;
           this.selectedAgentSlug = agent.slug;
           this.currentView = 'chat';
-          this.chatMessages = [];
+          await this.loadAgentSessions(agent.slug);
+        },
+
+        async loadAgentSessions(slug) {
+          try {
+            const res = await this.apiFetch(`/api/agents/${slug}/chats`);
+            if (res.ok) {
+              const data = await res.json();
+              this.agentSessions = data.sessions || [];
+              if (this.agentSessions.length > 0 && !this.activeSessionId) {
+                this.activeSessionId = this.agentSessions[0].id;
+                await this.loadSessionMessages(this.activeSessionId);
+              } else if (!this.agentSessions.length) {
+                this.activeSessionId = '';
+                this.chatMessages = [];
+              }
+            }
+          } catch (e) {
+            console.error(e);
+          }
+        },
+
+        async loadSessionMessages(sessionId) {
+          this.haptic();
+          if (!sessionId) {
+            this.chatMessages = [];
+            return;
+          }
+          try {
+            const res = await this.apiFetch(`/api/agents/${this.activeAgent.slug}/chats/${sessionId}`);
+            if (res.ok) {
+              const data = await res.json();
+              this.chatMessages = (data.messages || []).map(m => ({
+                role: m.role,
+                content: m.content,
+                thoughts: m.thoughts || []
+              }));
+              this.scrollToBottom();
+            }
+          } catch (e) {
+            console.error(e);
+          }
         },
 
         switchActiveAgent() {
           const found = this.agents.find(a => a.slug === this.selectedAgentSlug);
           if (found) {
+            this.activeSessionId = '';
             this.selectAgentForChat(found);
           }
         },
@@ -968,10 +1024,15 @@
           this.scrollToBottom();
 
           try {
+            const payload = {
+              message: userMsg,
+              session_id: this.activeSessionId || null
+            };
+
             const response = await this.apiFetch(`/api/agents/${this.activeAgent.slug}/chat`, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ message: userMsg })
+              body: JSON.stringify(payload)
             });
 
             if (!response.ok) {
@@ -1012,7 +1073,17 @@
                     parsed = rawData;
                   }
 
-                  if (currentEvent === 'thought') {
+                  if (currentEvent === 'session') {
+                    if (parsed && parsed.session_id) {
+                      this.activeSessionId = parsed.session_id;
+                      this.apiFetch(`/api/agents/${this.activeAgent.slug}/chats`).then(async res => {
+                        if (res.ok) {
+                          const d = await res.json();
+                          this.agentSessions = d.sessions || [];
+                        }
+                      });
+                    }
+                  } else if (currentEvent === 'thought') {
                     const thoughtText = typeof parsed === 'string' ? parsed : (parsed.text || JSON.stringify(parsed));
                     if (thoughtText && !this.chatMessages[assistantMsgIdx].thoughts.includes(thoughtText)) {
                       this.chatMessages[assistantMsgIdx].thoughts.push(thoughtText);

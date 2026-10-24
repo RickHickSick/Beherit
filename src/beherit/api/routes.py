@@ -189,12 +189,13 @@ async def update_agent(slug: str, payload: UpdateAgentRequest):
 
 @router.delete("/{slug}", status_code=status.HTTP_200_OK)
 async def delete_agent(slug: str):
-    """Delete an agent directory and clear its auth session."""
+    """Delete an agent directory and clear its auth session and database records."""
     agent = repo.load_agent(slug)
     if not agent:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Agent not found.")
 
     auth_mgr.clear_session(slug)
+    db_mgr.delete_agent_data(slug)
     deleted = repo.delete_agent(slug)
     return {"status": "deleted", "slug": slug, "success": deleted}
 
