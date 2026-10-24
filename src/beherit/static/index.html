@@ -533,6 +533,7 @@
             const reader = response.body.getReader();
             const decoder = new TextDecoder();
             let buffer = '';
+            let currentEvent = 'token';
 
             while (true) {
               const { done, value } = await reader.read();
@@ -543,25 +544,45 @@
               buffer = lines.pop(); // keep last partial line
 
               for (const line of lines) {
-                if (line.startsWith('data: ')) {
-                  try {
-                    const rawData = line.slice(6).trim();
-                    const parsed = JSON.parse(rawData);
+                const trimmed = line.trim();
+                if (!trimmed) {
+                  currentEvent = 'token';
+                  continue;
+                }
 
+                if (line.startsWith('event: ')) {
+                  currentEvent = line.slice(7).trim();
+                  continue;
+                }
+
+                if (line.startsWith('data: ')) {
+                  const rawData = line.slice(6).trim();
+                  let parsed = rawData;
+                  try {
+                    parsed = JSON.parse(rawData);
+                  } catch (err) {
+                    parsed = rawData;
+                  }
+
+                  if (currentEvent === 'thought') {
+                    const thoughtText = typeof parsed === 'string' ? parsed : (parsed.text || JSON.stringify(parsed));
+                    if (thoughtText && !this.chatMessages[assistantMsgIdx].thoughts.includes(thoughtText)) {
+                      this.chatMessages[assistantMsgIdx].thoughts.push(thoughtText);
+                    }
+                  } else if (currentEvent === 'error') {
+                    const errMsg = (typeof parsed === 'object' && parsed.error) ? parsed.error : parsed;
+                    this.chatMessages[assistantMsgIdx].content += `\n\n> ⚠️ **Błąd:** ${errMsg}`;
+                  } else if (currentEvent === 'tool_call') {
+                    const toolInfo = typeof parsed === 'object' ? JSON.stringify(parsed) : parsed;
+                    this.chatMessages[assistantMsgIdx].thoughts.push(`⚡ Narzędzie: ${toolInfo}`);
+                  } else if (currentEvent === 'token' || currentEvent === 'message') {
                     if (typeof parsed === 'object' && parsed.error) {
                       this.chatMessages[assistantMsgIdx].content += `\n\n> ⚠️ **Błąd:** ${parsed.error}`;
                     } else if (typeof parsed === 'string') {
                       this.chatMessages[assistantMsgIdx].content += parsed;
                     }
-                    this.scrollToBottom();
-                  } catch (err) {
-                    // Raw string payload
-                    const raw = line.slice(6);
-                    if (raw) this.chatMessages[assistantMsgIdx].content += raw;
                   }
-                } else if (line.startsWith('event: thought')) {
-                  // Capture thoughts in accordion
-                  this.chatMessages[assistantMsgIdx].thoughts.push('Analiza kontekstu...');
+                  this.scrollToBottom();
                 }
               }
             }

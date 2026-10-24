@@ -3,7 +3,7 @@
 from datetime import date
 from enum import Enum
 from typing import Optional
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ConfigDict
 
 
 class EngineType(str, Enum):
@@ -64,6 +64,8 @@ class AgentSchedule(BaseModel):
 
 class AgentModel(BaseModel):
     """Full representation of an Agent loaded from Markdown and frontmatter."""
+    model_config = ConfigDict(extra="allow")
+
     name: str = Field(..., min_length=2, max_length=100)
     slug: str = Field(..., min_length=2, max_length=50, pattern=r"^[a-z0-9-]+$")
     description: str = Field(default="")

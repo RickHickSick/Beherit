@@ -76,25 +76,44 @@ class AntigravityEngine(BaseAgentEngine):
         env = self.auth_manager.get_sdk_environment(agent.slug)
 
         # Build prompt incorporating Master Prompt & Instructions
-        full_system_context = agent.master_prompt
-        if agent.instructions:
-            full_system_context += f"\n\n## Guidelines\n{agent.instructions}"
+        full_system_context = agent.master_prompt.strip()
+        if agent.instructions and agent.instructions.strip():
+            full_system_context += f"\n\n## Operational Guidelines\n{agent.instructions.strip()}"
+
+        # Combine system role context, conversation history, and user message
+        prompt_parts = []
+        if full_system_context:
+            prompt_parts.append(f"[SYSTEM CONTEXT & ROLE]\n{full_system_context}\n[END SYSTEM CONTEXT]")
+
+        if history:
+            history_lines = []
+            for h in history:
+                role_label = "User" if h.get("role") == "user" else agent.name
+                history_lines.append(f"{role_label}: {h.get('content', '')}")
+            prompt_parts.append(f"[CONVERSATION HISTORY]\n" + "\n".join(history_lines) + "\n[END CONVERSATION HISTORY]")
+
+        prompt_parts.append(f"[CURRENT USER REQUEST]\n{message}")
+        full_turn_prompt = "\n\n".join(prompt_parts)
 
         yield {
             "event": "thought",
             "data": f"Initializing {agent.name} with Antigravity profile ({agent.model})...",
         }
 
+        # Resolve agent workspace directory
+        workspace_dir = Path(agent.file_path).parent if agent.file_path else (self.auth_manager.base_dir / agent.slug)
+        workspace_dir.mkdir(parents=True, exist_ok=True)
+
         # If agy binary is available on the system, run with isolated environment
         if self.cli_binary:
             cmd = [
                 self.cli_binary,
-                "--print",
                 "--output-format",
                 "stream-json",
                 "--model",
                 agent.model,
-                message,
+                "--print",
+                full_turn_prompt,
             ]
 
             try:
@@ -102,6 +121,7 @@ class AntigravityEngine(BaseAgentEngine):
                     *cmd,
                     stdout=asyncio.subprocess.PIPE,
                     stderr=asyncio.subprocess.PIPE,
+                    cwd=str(workspace_dir),
                     env=env,
                 )
 
@@ -115,20 +135,42 @@ class AntigravityEngine(BaseAgentEngine):
                         continue
                     try:
                         data = json.loads(decoded)
-                        # Yield token or thought from JSON stream
-                        yield {"event": "token", "data": data.get("text", decoded)}
+                        event_type = data.get("event")
+
+                        # Handle agy stream-json step events
+                        if event_type == "step_update":
+                            step_data = data.get("step_update", {})
+                            text_delta = step_data.get("text_delta")
+                            if text_delta:
+                                yield {"event": "token", "data": text_delta}
+                        elif event_type == "result":
+                            pass
+                        elif event_type == "thought":
+                            yield {"event": "thought", "data": data.get("data", decoded)}
+                        elif event_type == "error":
+                            yield {"event": "error", "data": data.get("error", decoded)}
+                        else:
+                            text = data.get("text") or data.get("delta")
+                            if text:
+                                yield {"event": "token", "data": text}
                     except json.JSONDecodeError:
                         yield {"event": "token", "data": decoded}
 
                 await process.wait()
+                if process.returncode != 0 and process.stderr:
+                    err_bytes = await process.stderr.read()
+                    err_text = err_bytes.decode("utf-8", errors="replace").strip()
+                    if err_text:
+                        yield {"event": "error", "data": {"error": err_text}}
 
             except Exception as e:
                 yield {"event": "error", "data": {"error": str(e)}}
 
         else:
             # Fallback simulator for unit tests or environments without agy binary
-            yield {"event": "thought", "data": "Processing request in authenticated sandbox..."}
-            simulated_response = f"Echo from {agent.name}: Processed '{message}' securely."
+            yield {"event": "thought", "data": f"Processing turn for {agent.name} with prompt context..."}
+            context_summary = f"(Identity: {agent.master_prompt[:30]}...)" if agent.master_prompt else ""
+            simulated_response = f"Echo from {agent.name} {context_summary}: Processed '{message}' securely."
             for word in simulated_response.split():
                 yield {"event": "token", "data": f"{word} "}
                 await asyncio.sleep(0.02)
