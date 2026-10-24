@@ -72,6 +72,24 @@
       x-data="beheritApp()"
       x-init="initApp()">
 
+  <!-- LOCK SCREEN: PIN / ACCESS TOKEN GUARD -->
+  <div x-show="showAuthLockScreen" class="fixed inset-0 z-50 bg-slate-950/95 backdrop-blur-md flex items-center justify-center p-4" style="display: none;">
+    <div class="bg-slate-900 border border-slate-800 w-full max-w-sm rounded-2xl p-6 shadow-2xl space-y-4 text-center">
+      <div class="w-12 h-12 rounded-2xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 flex items-center justify-center text-2xl mx-auto shadow-lg shadow-emerald-500/10">
+        🔒
+      </div>
+      <div>
+        <h3 class="text-lg font-bold text-slate-100">Dostęp Zabezpieczony</h3>
+        <p class="text-xs text-slate-400 mt-1">Podaj kod PIN lub klucz BEHERIT_ACCESS_TOKEN, aby odblokować panel.</p>
+      </div>
+      <form @submit.prevent="submitPinAuth()" class="space-y-3">
+        <input type="password" x-model="authLockInput" placeholder="Wprowadź PIN / Token..." autofocus class="w-full text-center bg-slate-800 text-slate-100 px-3.5 py-2.5 rounded-xl border border-slate-700 outline-none focus:border-emerald-500 font-mono text-sm tracking-widest">
+        <button type="submit" class="w-full bg-emerald-600 hover:bg-emerald-500 text-slate-950 font-bold py-2.5 rounded-xl text-sm transition">Odblokuj Panel</button>
+      </form>
+      <p x-show="authLockError" class="text-xs text-red-400" x-text="authLockError"></p>
+    </div>
+  </div>
+
   <!-- Top Notification Toast -->
   <div x-show="toastMessage" 
        x-transition:enter="transition ease-out duration-300"
@@ -191,6 +209,11 @@
                     ⏱️ <span x-text="agent.schedule.cron"></span>
                   </span>
                 </template>
+                <template x-if="agent.mcp_servers && Object.keys(agent.mcp_servers).length > 0">
+                  <span class="bg-slate-800/80 px-2 py-1 rounded-md border border-slate-700/50 text-sky-400 flex items-center gap-1">
+                    🔌 MCP (<span x-text="Object.keys(agent.mcp_servers).length"></span>)
+                  </span>
+                </template>
               </div>
             </div>
 
@@ -216,14 +239,19 @@
                 </button>
               </div>
 
-              <!-- Secondary Row: Edit & Delete -->
-              <div class="flex items-center justify-end gap-2 text-xs pt-1 border-t border-slate-800/40">
-                <button @click="openEditModalFor(agent)" class="text-slate-400 hover:text-slate-200 px-2 py-1 rounded transition flex items-center gap-1">
-                  ✏️ Edytuj
+              <!-- Secondary Row: Knowledge, Edit & Delete -->
+              <div class="flex items-center justify-between text-xs pt-1 border-t border-slate-800/40">
+                <button @click="openKnowledgeModalFor(agent)" class="text-slate-400 hover:text-emerald-400 px-1 py-1 rounded transition flex items-center gap-1">
+                  📚 Baza wiedzy
                 </button>
-                <button @click="deleteAgent(agent)" class="text-red-400 hover:text-red-300 px-2 py-1 rounded transition flex items-center gap-1">
-                  🗑️ Usuń
-                </button>
+                <div class="flex items-center gap-2">
+                  <button @click="openEditModalFor(agent)" class="text-slate-400 hover:text-slate-200 px-1 py-1 rounded transition flex items-center gap-1">
+                    ✏️ Edytuj
+                  </button>
+                  <button @click="deleteAgent(agent)" class="text-red-400 hover:text-red-300 px-1 py-1 rounded transition flex items-center gap-1">
+                    🗑️ Usuń
+                  </button>
+                </div>
               </div>
             </div>
           </div>
@@ -524,6 +552,12 @@
           </div>
         </div>
 
+        <!-- MCP Servers Config -->
+        <div>
+          <label class="block text-xs font-semibold text-slate-300 mb-1">Serwery MCP (Model Context Protocol - JSON)</label>
+          <textarea x-model="editAgent.mcp_servers_json" rows="3" placeholder='{"postgres": {"command": "npx", "args": ["-y", "@modelcontextprotocol/server-postgres", "..."]}}' class="w-full bg-slate-800 text-slate-100 px-3.5 py-2.5 rounded-xl border border-slate-700 outline-none font-mono text-xs focus:border-emerald-500"></textarea>
+        </div>
+
         <div>
           <label class="block text-xs font-semibold text-slate-300 mb-1">Master Prompt (Główna Rola Agenta)</label>
           <textarea x-model="editAgent.master_prompt" rows="3" class="w-full bg-slate-800 text-slate-100 px-3.5 py-2.5 rounded-xl border border-slate-700 outline-none text-xs focus:border-emerald-500"></textarea>
@@ -538,6 +572,56 @@
       <div class="pt-3 border-t border-slate-800 flex justify-end gap-2">
         <button @click="openEditModal = false" class="px-4 py-2 rounded-xl text-slate-400 hover:text-slate-200 text-xs">Anuluj</button>
         <button @click="submitUpdateAgent()" class="bg-emerald-600 hover:bg-emerald-500 text-slate-950 font-bold px-5 py-2 rounded-xl text-xs transition">Zapisz Zmiany</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: BAZA WIEDZY AGENTA (KNOWLEDGE BASE) -->
+  <div x-show="openKnowledgeModal" class="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4" style="display: none;">
+    <div @click.away="openKnowledgeModal = false" class="bg-slate-900 border border-slate-800 w-full max-w-2xl rounded-2xl p-6 shadow-2xl space-y-4 max-h-[90vh] flex flex-col">
+      <div class="flex items-center justify-between border-b border-slate-800 pb-3">
+        <div>
+          <h3 class="text-base font-bold text-slate-100 flex items-center gap-2">
+            <span>📚</span> Baza Wiedzy: <span class="text-emerald-400" x-text="knowledgeTargetAgent ? knowledgeTargetAgent.name : ''"></span>
+          </h3>
+          <p class="text-xs text-slate-400">Pliki w folderze knowledge/ są automatycznie wstrzykiwane do kontekstu tego agenta.</p>
+        </div>
+        <button @click="openKnowledgeModal = false" class="text-slate-400 hover:text-slate-200">✕</button>
+      </div>
+
+      <!-- Documents List & Editor -->
+      <div class="flex-1 flex flex-col sm:flex-row gap-4 min-h-[300px] overflow-hidden">
+        <!-- File list sidebar -->
+        <div class="w-full sm:w-1/3 border border-slate-800 rounded-xl p-2 bg-slate-950/60 overflow-y-auto custom-scroll space-y-1">
+          <div class="flex justify-between items-center px-2 py-1 mb-1 border-b border-slate-800/60">
+            <span class="text-[11px] font-bold text-slate-400 uppercase">Dokumenty</span>
+            <button @click="createNewKnowledgeDoc()" class="text-xs text-emerald-400 hover:text-emerald-300 font-bold">＋ Nowy</button>
+          </div>
+          <template x-for="doc in knowledgeFiles" :key="doc.filename">
+            <div @click="loadKnowledgeDoc(doc.filename)"
+                 :class="activeDocName === doc.filename ? 'bg-slate-800 text-emerald-400 border-slate-700' : 'text-slate-300 hover:bg-slate-900 border-transparent'"
+                 class="px-2.5 py-2 rounded-lg text-xs cursor-pointer border flex items-center justify-between transition">
+              <span class="truncate" x-text="doc.filename"></span>
+              <button @click.stop="deleteKnowledgeDoc(doc.filename)" class="text-red-400 hover:text-red-300 ml-1 text-xs">✕</button>
+            </div>
+          </template>
+          <template x-if="knowledgeFiles.length === 0">
+            <p class="text-xs text-slate-500 p-2 text-center">Brak plików w bazie wiedzy.</p>
+          </template>
+        </div>
+
+        <!-- Editor area -->
+        <div class="flex-1 flex flex-col space-y-2">
+          <input type="text" x-model="docEditorFilename" placeholder="np. wytyczne_finansowe.md" class="bg-slate-800 text-slate-100 px-3 py-1.5 rounded-lg border border-slate-700 outline-none text-xs font-mono">
+          <textarea x-model="docEditorContent" placeholder="Wklej dokumentację, tabele danych, cennik lub procedury operacyjne..." class="flex-1 w-full bg-slate-950 text-slate-200 p-3 rounded-lg border border-slate-800 outline-none font-mono text-xs resize-none"></textarea>
+          <div class="flex justify-end gap-2 pt-1">
+            <button @click="saveKnowledgeDoc()" class="bg-emerald-600 hover:bg-emerald-500 text-slate-950 font-bold px-4 py-1.5 rounded-lg text-xs transition">Zapisz Dokument</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="pt-2 border-t border-slate-800 flex justify-end">
+        <button @click="openKnowledgeModal = false" class="bg-slate-800 hover:bg-slate-700 text-slate-200 px-4 py-1.5 rounded-xl text-xs font-semibold">Zamknij</button>
       </div>
     </div>
   </div>
@@ -560,7 +644,7 @@
       </div>
 
       <div class="pt-2 border-t border-slate-800 flex justify-end">
-        <button @click="openReportModal = false" class="bg-slate-800 hover:bg-slate-700 text-slate-200 px-4 py-2 rounded-xl text-xs font-semibold">Zamknij</button>
+        <button @click="openReportModal = false" class="bg-slate-800 hover:bg-slate-700 text-slate-200 px-4 py-1.5 rounded-xl text-xs font-semibold">Zamknij</button>
       </div>
     </div>
   </div>
@@ -666,6 +750,11 @@
         toastMessage: '',
         runningAgentSlug: null,
 
+        // Auth Guard
+        showAuthLockScreen: false,
+        authLockInput: '',
+        authLockError: '',
+
         // Reports & History
         historyList: [],
         openReportModal: false,
@@ -702,9 +791,18 @@
           schedule_enabled: false,
           schedule_cron: '0 8 * * *',
           schedule_prompt: '',
+          mcp_servers_json: '',
           master_prompt: '',
           instructions: ''
         },
+
+        // Knowledge Base Modal
+        openKnowledgeModal: false,
+        knowledgeTargetAgent: null,
+        knowledgeFiles: [],
+        activeDocName: '',
+        docEditorFilename: '',
+        docEditorContent: '',
 
         // Auth Modal
         openAuthModal: false,
@@ -728,10 +826,62 @@
           }, 4000);
         },
 
+        async apiFetch(url, options = {}) {
+          const token = localStorage.getItem('beherit_access_token');
+          const headers = Object.assign({}, options.headers || {});
+          if (token) {
+            headers['X-Beherit-Token'] = token;
+            headers['Authorization'] = `Bearer ${token}`;
+          }
+          options.headers = headers;
+
+          const res = await fetch(url, options);
+          if (res.status === 401) {
+            this.showAuthLockScreen = true;
+          }
+          return res;
+        },
+
         async initApp() {
+          try {
+            const authRes = await fetch('/api/auth/status');
+            const authData = await authRes.json();
+            if (authData.auth_required) {
+              const savedToken = localStorage.getItem('beherit_access_token');
+              if (!savedToken) {
+                this.showAuthLockScreen = true;
+                return;
+              }
+            }
+          } catch (_) {}
+
           await this.loadAgents();
           if (this.agents.length > 0) {
             this.selectAgentForChat(this.agents[0]);
+          }
+        },
+
+        async submitPinAuth() {
+          this.haptic();
+          if (!this.authLockInput.trim()) return;
+          try {
+            const res = await fetch('/api/auth/verify', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ token: this.authLockInput })
+            });
+            const data = await res.json();
+            if (data.valid) {
+              localStorage.setItem('beherit_access_token', this.authLockInput);
+              this.showAuthLockScreen = false;
+              this.authLockError = '';
+              this.authLockInput = '';
+              await this.loadAgents();
+            } else {
+              this.authLockError = 'Nieprawidłowy PIN lub klucz dostępu.';
+            }
+          } catch (e) {
+            this.authLockError = `Błąd połączenia: ${e.message}`;
           }
         },
 
@@ -745,9 +895,11 @@
 
         async loadAgents() {
           try {
-            const res = await fetch('/api/agents');
-            const data = await res.json();
-            this.agents = data.agents || [];
+            const res = await this.apiFetch('/api/agents');
+            if (res.ok) {
+              const data = await res.json();
+              this.agents = data.agents || [];
+            }
           } catch (e) {
             console.error('Błąd ładowania agentów:', e);
           }
@@ -755,9 +907,11 @@
 
         async loadHistory() {
           try {
-            const res = await fetch('/api/history');
-            const data = await res.json();
-            this.historyList = data.history || [];
+            const res = await this.apiFetch('/api/history');
+            if (res.ok) {
+              const data = await res.json();
+              this.historyList = data.history || [];
+            }
           } catch (e) {
             console.error('Błąd ładowania historii:', e);
           }
@@ -814,11 +968,15 @@
           this.scrollToBottom();
 
           try {
-            const response = await fetch(`/api/agents/${this.activeAgent.slug}/chat`, {
+            const response = await this.apiFetch(`/api/agents/${this.activeAgent.slug}/chat`, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ message: userMsg })
             });
+
+            if (!response.ok) {
+              throw new Error(`HTTP ${response.status}`);
+            }
 
             const reader = response.body.getReader();
             const decoder = new TextDecoder();
@@ -903,7 +1061,7 @@
         async submitCreateAgent() {
           this.haptic();
           try {
-            const res = await fetch('/api/agents', {
+            const res = await this.apiFetch('/api/agents', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify(this.newAgent)
@@ -926,6 +1084,10 @@
 
         openEditModalFor(agent) {
           this.haptic();
+          let mcpJsonStr = '';
+          if (agent.mcp_servers && Object.keys(agent.mcp_servers).length > 0) {
+            mcpJsonStr = JSON.stringify(agent.mcp_servers, null, 2);
+          }
           this.editAgent = {
             slug: agent.slug,
             name: agent.name || '',
@@ -936,6 +1098,7 @@
             schedule_enabled: !!(agent.schedule && agent.schedule.enabled),
             schedule_cron: (agent.schedule && agent.schedule.cron) || '0 8 * * *',
             schedule_prompt: (agent.schedule && agent.schedule.prompt) || '',
+            mcp_servers_json: mcpJsonStr,
             master_prompt: agent.master_prompt || '',
             instructions: agent.instructions || ''
           };
@@ -945,6 +1108,16 @@
         async submitUpdateAgent() {
           this.haptic();
           try {
+            let parsedMcp = {};
+            if (this.editAgent.mcp_servers_json.trim()) {
+              try {
+                parsedMcp = JSON.parse(this.editAgent.mcp_servers_json);
+              } catch (err) {
+                alert(`Niepoprawny format JSON w sekcji MCP: ${err.message}`);
+                return;
+              }
+            }
+
             const payload = {
               name: this.editAgent.name,
               description: this.editAgent.description,
@@ -952,6 +1125,7 @@
               model: this.editAgent.model,
               master_prompt: this.editAgent.master_prompt,
               instructions: this.editAgent.instructions,
+              mcp_servers: parsedMcp,
               capabilities: {
                 terminal: this.editAgent.terminal_mode !== 'disabled',
                 terminal_mode: this.editAgent.terminal_mode,
@@ -965,7 +1139,7 @@
               }
             };
 
-            const res = await fetch(`/api/agents/${this.editAgent.slug}`, {
+            const res = await this.apiFetch(`/api/agents/${this.editAgent.slug}`, {
               method: 'PUT',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify(payload)
@@ -991,7 +1165,7 @@
           }
 
           try {
-            const res = await fetch(`/api/agents/${agent.slug}`, {
+            const res = await this.apiFetch(`/api/agents/${agent.slug}`, {
               method: 'DELETE'
             });
 
@@ -1011,13 +1185,109 @@
           }
         },
 
+        // Knowledge Base methods
+        async openKnowledgeModalFor(agent) {
+          this.haptic();
+          this.knowledgeTargetAgent = agent;
+          this.openKnowledgeModal = true;
+          this.activeDocName = '';
+          this.docEditorFilename = '';
+          this.docEditorContent = '';
+          await this.loadKnowledgeFiles();
+        },
+
+        async loadKnowledgeFiles() {
+          if (!this.knowledgeTargetAgent) return;
+          try {
+            const res = await this.apiFetch(`/api/agents/${this.knowledgeTargetAgent.slug}/knowledge`);
+            if (res.ok) {
+              const data = await res.json();
+              this.knowledgeFiles = data.files || [];
+              if (this.knowledgeFiles.length > 0 && !this.activeDocName) {
+                this.loadKnowledgeDoc(this.knowledgeFiles[0].filename);
+              }
+            }
+          } catch (e) {
+            console.error('Błąd bazy wiedzy:', e);
+          }
+        },
+
+        async loadKnowledgeDoc(filename) {
+          this.haptic();
+          this.activeDocName = filename;
+          this.docEditorFilename = filename;
+          try {
+            const res = await this.apiFetch(`/api/agents/${this.knowledgeTargetAgent.slug}/knowledge/${encodeURIComponent(filename)}`);
+            if (res.ok) {
+              const data = await res.json();
+              this.docEditorContent = data.content || '';
+            }
+          } catch (e) {
+            console.error(e);
+          }
+        },
+
+        createNewKnowledgeDoc() {
+          this.haptic();
+          this.activeDocName = '';
+          this.docEditorFilename = 'nowy_dokument.md';
+          this.docEditorContent = '';
+        },
+
+        async saveKnowledgeDoc() {
+          this.haptic();
+          if (!this.docEditorFilename.trim()) return;
+          try {
+            const res = await this.apiFetch(`/api/agents/${this.knowledgeTargetAgent.slug}/knowledge`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                filename: this.docEditorFilename.trim(),
+                content: this.docEditorContent
+              })
+            });
+
+            if (res.ok) {
+              this.showToast(`Zapisano ${this.docEditorFilename}`);
+              await this.loadKnowledgeFiles();
+              this.activeDocName = this.docEditorFilename.trim();
+            } else {
+              const err = await res.json();
+              alert(`Błąd zapisu: ${err.detail || 'Błąd'}`);
+            }
+          } catch (e) {
+            alert(`Błąd sieci: ${e.message}`);
+          }
+        },
+
+        async deleteKnowledgeDoc(filename) {
+          this.haptic();
+          if (!confirm(`Czy usunąć dokument "${filename}" z bazy wiedzy?`)) return;
+          try {
+            const res = await this.apiFetch(`/api/agents/${this.knowledgeTargetAgent.slug}/knowledge/${encodeURIComponent(filename)}`, {
+              method: 'DELETE'
+            });
+            if (res.ok) {
+              this.showToast(`Usunięto ${filename}`);
+              if (this.activeDocName === filename) {
+                this.activeDocName = '';
+                this.docEditorFilename = '';
+                this.docEditorContent = '';
+              }
+              await this.loadKnowledgeFiles();
+            }
+          } catch (e) {
+            alert(e.message);
+          }
+        },
+
         async runAgentNow(agent) {
           this.haptic();
           this.runningAgentSlug = agent.slug;
           this.showToast(`Uruchamianie zadania agenta ${agent.name}...`);
 
           try {
-            const res = await fetch(`/api/agents/${agent.slug}/run-now`, {
+            const res = await this.apiFetch(`/api/agents/${agent.slug}/run-now`, {
               method: 'POST'
             });
 
@@ -1039,7 +1309,7 @@
         async viewReport(reportPath) {
           this.haptic();
           try {
-            const res = await fetch(`/api/reports/view?path=${encodeURIComponent(reportPath)}`);
+            const res = await this.apiFetch(`/api/reports/view?path=${encodeURIComponent(reportPath)}`);
             if (res.ok) {
               const data = await res.json();
               this.currentReportFilename = data.filename;
@@ -1068,8 +1338,10 @@
         async refreshAuthDetails() {
           if (!this.authTargetAgent) return;
           try {
-            const res = await fetch(`/api/agents/${this.authTargetAgent.slug}/auth/status`);
-            this.authStatusDetails = await res.json();
+            const res = await this.apiFetch(`/api/agents/${this.authTargetAgent.slug}/auth/status`);
+            if (res.ok) {
+              this.authStatusDetails = await res.json();
+            }
           } catch (e) {
             console.error(e);
           }
@@ -1077,7 +1349,7 @@
 
         async startOAuthFlow() {
           try {
-            const res = await fetch(`/api/agents/${this.authTargetAgent.slug}/auth/start`, {
+            const res = await this.apiFetch(`/api/agents/${this.authTargetAgent.slug}/auth/start`, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ provider: this.authTargetAgent.engine })
@@ -1090,7 +1362,7 @@
 
         async verifyOAuthCode() {
           try {
-            const res = await fetch(`/api/agents/${this.authTargetAgent.slug}/auth/verify`, {
+            const res = await this.apiFetch(`/api/agents/${this.authTargetAgent.slug}/auth/verify`, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({
@@ -1114,7 +1386,7 @@
 
         async saveManualToken() {
           try {
-            const res = await fetch(`/api/agents/${this.authTargetAgent.slug}/auth/manual`, {
+            const res = await this.apiFetch(`/api/agents/${this.authTargetAgent.slug}/auth/manual`, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({
@@ -1138,7 +1410,7 @@
         async disconnectAgentAuth() {
           if (!confirm('Czy na pewno chcesz rozłączyć subskrypcję tego agenta?')) return;
           try {
-            const res = await fetch(`/api/agents/${this.authTargetAgent.slug}/auth/disconnect`, {
+            const res = await this.apiFetch(`/api/agents/${this.authTargetAgent.slug}/auth/disconnect`, {
               method: 'POST'
             });
             if (res.ok) {

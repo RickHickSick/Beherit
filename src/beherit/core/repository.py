@@ -125,6 +125,17 @@ class AgentRepository:
             instructions_file = agent_dir / "instructions.md"
             instructions_file.write_text(agent.instructions, encoding="utf-8")
 
+        # Sync mcp.json for CLI engines if mcp_servers defined
+        if agent.mcp_servers:
+            import json
+            mcp_data = {
+                "mcpServers": {
+                    name: server.model_dump(mode="json")
+                    for name, server in agent.mcp_servers.items()
+                }
+            }
+            (agent_dir / "mcp.json").write_text(json.dumps(mcp_data, indent=2), encoding="utf-8")
+
         return agent_dir
 
     def delete_agent(self, slug: str) -> bool:

@@ -2,7 +2,7 @@
 
 from datetime import date
 from enum import Enum
-from typing import Optional
+from typing import Dict, List, Optional
 from pydantic import BaseModel, Field, ConfigDict
 
 
@@ -10,6 +10,13 @@ class EngineType(str, Enum):
     ANTIGRAVITY = "antigravity"
     CLAUDE_CODE = "claude-code"
     CODEX = "codex"
+
+
+class MCPServerConfig(BaseModel):
+    """External Model Context Protocol (MCP) server configuration."""
+    command: str = Field(..., description="Executable command e.g. npx, python, or binary path")
+    args: List[str] = Field(default_factory=list, description="Arguments passed to MCP server")
+    env: Dict[str, str] = Field(default_factory=dict, description="Environment variables for the server")
 
 
 class AuthStatus(str, Enum):
@@ -77,6 +84,10 @@ class AgentModel(BaseModel):
     schedule: AgentSchedule = Field(default_factory=AgentSchedule)
     master_prompt: str = Field(default="")
     instructions: Optional[str] = Field(default=None)
+    mcp_servers: Dict[str, MCPServerConfig] = Field(
+        default_factory=dict,
+        description="Dictionary of external MCP servers configured for this agent",
+    )
     
     # Metadata fields for runtime observation
     file_path: Optional[str] = Field(default=None, description="Absolute path on disk to agent.md")

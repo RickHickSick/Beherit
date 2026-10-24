@@ -20,10 +20,14 @@ class Settings(BaseSettings):
     BEHERIT_PORT: int = Field(default=8650, description="Port to listen on")
     BEHERIT_ENV: str = Field(default="development", description="Runtime environment")
 
-    # Security
+    # Security & Access Protection
     BEHERIT_SECRET_KEY: str = Field(
         default="beherit-default-insecure-secret-key-please-change-in-production",
         description="Secret key for signing sessions and tokens",
+    )
+    BEHERIT_ACCESS_TOKEN: Union[str, None] = Field(
+        default=None,
+        description="Optional access PIN/token guarding the Web UI and API (status 401 if unauthorized)",
     )
 
     # Storage Paths

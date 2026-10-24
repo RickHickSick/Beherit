@@ -73,9 +73,7 @@ class ClaudeCodeEngine(BaseAgentEngine):
         env["CLAUDE_CONFIG_DIR"] = str(auth_dir)
 
         # Build full prompt
-        full_system_context = agent.master_prompt.strip()
-        if agent.instructions and agent.instructions.strip():
-            full_system_context += f"\n\n## Guidelines\n{agent.instructions.strip()}"
+        full_system_context = self.build_system_context(agent)
 
         prompt_parts = []
         if full_system_context:

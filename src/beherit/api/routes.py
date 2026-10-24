@@ -1,5 +1,6 @@
 """REST API Routes for Agent CRUD, Per-Agent Auth, and Streaming Chat."""
 
+import hmac
 import json
 from pathlib import Path
 from typing import Any, Dict, List, Optional
@@ -7,17 +8,25 @@ from fastapi import APIRouter, HTTPException, status
 from pydantic import BaseModel, Field
 from sse_starlette.sse import EventSourceResponse
 
+from beherit.config import settings
 from beherit.core.auth_manager import AgentAuthManager
 from beherit.core.database import DatabaseManager
 from beherit.core.repository import AgentRepository
 from beherit.core.scheduler import AgentScheduler
 from beherit.core.tools import CapabilitiesGuard
 from beherit.engines import EngineRegistry
-from beherit.models.agent import AgentModel, EngineType, AgentCapabilities, AgentSchedule
+from beherit.models.agent import (
+    AgentModel,
+    EngineType,
+    AgentCapabilities,
+    AgentSchedule,
+    MCPServerConfig,
+)
 
 router = APIRouter(prefix="/api/agents", tags=["agents"])
 history_router = APIRouter(prefix="/api/history", tags=["history"])
 reports_router = APIRouter(prefix="/api/reports", tags=["reports"])
+auth_guard_router = APIRouter(prefix="/api/auth", tags=["auth_guard"])
 
 repo = AgentRepository()
 auth_mgr = AgentAuthManager()
@@ -37,6 +46,7 @@ class CreateAgentRequest(BaseModel):
     instructions: Optional[str] = Field(default="")
     capabilities: Optional[AgentCapabilities] = None
     schedule: Optional[AgentSchedule] = None
+    mcp_servers: Optional[Dict[str, MCPServerConfig]] = None
     custom_target_dir: Optional[str] = Field(
         default=None,
         description="Optional custom path (e.g. specific Obsidian folder) to save this agent",
@@ -52,6 +62,16 @@ class UpdateAgentRequest(BaseModel):
     instructions: Optional[str] = None
     capabilities: Optional[AgentCapabilities] = None
     schedule: Optional[AgentSchedule] = None
+    mcp_servers: Optional[Dict[str, MCPServerConfig]] = None
+
+
+class SaveKnowledgeRequest(BaseModel):
+    filename: str = Field(..., min_length=1, max_length=100)
+    content: str = Field(default="")
+
+
+class VerifyTokenRequest(BaseModel):
+    token: str
 
 
 class ManualTokenRequest(BaseModel):
@@ -112,6 +132,7 @@ async def create_agent(payload: CreateAgentRequest):
         instructions=payload.instructions,
         capabilities=payload.capabilities or AgentCapabilities(),
         schedule=payload.schedule or AgentSchedule(),
+        mcp_servers=payload.mcp_servers or {},
     )
 
     target_dir = Path(payload.custom_target_dir) if payload.custom_target_dir else None
@@ -158,6 +179,8 @@ async def update_agent(slug: str, payload: UpdateAgentRequest):
         agent.capabilities = payload.capabilities
     if payload.schedule is not None:
         agent.schedule = payload.schedule
+    if payload.mcp_servers is not None:
+        agent.mcp_servers = payload.mcp_servers
 
     repo.save_agent(agent)
     scheduler.sync_all_jobs()
@@ -304,6 +327,112 @@ async def view_report(path: str):
         }
     except Exception as e:
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+
+
+# --- System Auth Guard Endpoints ---
+
+
+@auth_guard_router.get("/status")
+async def get_system_auth_status():
+    """Check if BEHERIT_ACCESS_TOKEN protection is enabled on the server."""
+    return {
+        "auth_required": bool(settings.BEHERIT_ACCESS_TOKEN),
+    }
+
+
+@auth_guard_router.post("/verify")
+async def verify_system_token(payload: VerifyTokenRequest):
+    """Verify system PIN or access token."""
+    if not settings.BEHERIT_ACCESS_TOKEN:
+        return {"valid": True, "auth_required": False}
+
+    valid = hmac.compare_digest(
+        payload.token.strip().encode("utf-8"),
+        settings.BEHERIT_ACCESS_TOKEN.strip().encode("utf-8"),
+    )
+    return {"valid": valid, "auth_required": True}
+
+
+# --- Agent Knowledge Base Endpoints ---
+
+
+@router.get("/{slug}/knowledge")
+async def list_agent_knowledge(slug: str):
+    """List documents stored in the agent's knowledge base directory."""
+    agent = repo.load_agent(slug)
+    if not agent:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Agent not found.")
+
+    agent_dir = Path(agent.file_path).parent if agent.file_path else (repo.base_dir / slug)
+    knowledge_dir = agent_dir / "knowledge"
+    knowledge_dir.mkdir(parents=True, exist_ok=True)
+
+    files = []
+    for f in sorted(knowledge_dir.iterdir()):
+        if f.is_file():
+            stat = f.stat()
+            files.append({
+                "filename": f.name,
+                "size_bytes": stat.st_size,
+                "updated_at": stat.st_mtime,
+            })
+    return {"slug": slug, "files": files}
+
+
+@router.get("/{slug}/knowledge/{filename}")
+async def get_agent_knowledge_file(slug: str, filename: str):
+    """Read a specific document from the agent's knowledge base."""
+    agent = repo.load_agent(slug)
+    if not agent:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Agent not found.")
+
+    safe_filename = Path(filename).name
+    agent_dir = Path(agent.file_path).parent if agent.file_path else (repo.base_dir / slug)
+    target_file = agent_dir / "knowledge" / safe_filename
+
+    if not target_file.is_file():
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Knowledge file not found.")
+
+    content = target_file.read_text(encoding="utf-8", errors="replace")
+    return {"filename": safe_filename, "content": content}
+
+
+@router.post("/{slug}/knowledge")
+async def save_agent_knowledge_file(slug: str, payload: SaveKnowledgeRequest):
+    """Create or update a document in the agent's knowledge base."""
+    agent = repo.load_agent(slug)
+    if not agent:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Agent not found.")
+
+    safe_filename = Path(payload.filename).name
+    if not safe_filename or safe_filename.startswith("."):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid filename.")
+
+    agent_dir = Path(agent.file_path).parent if agent.file_path else (repo.base_dir / slug)
+    knowledge_dir = agent_dir / "knowledge"
+    knowledge_dir.mkdir(parents=True, exist_ok=True)
+    target_file = knowledge_dir / safe_filename
+
+    target_file.write_text(payload.content, encoding="utf-8")
+    return {"status": "saved", "filename": safe_filename, "size_bytes": len(payload.content)}
+
+
+@router.delete("/{slug}/knowledge/{filename}")
+async def delete_agent_knowledge_file(slug: str, filename: str):
+    """Delete a document from the agent's knowledge base."""
+    agent = repo.load_agent(slug)
+    if not agent:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Agent not found.")
+
+    safe_filename = Path(filename).name
+    agent_dir = Path(agent.file_path).parent if agent.file_path else (repo.base_dir / slug)
+    target_file = agent_dir / "knowledge" / safe_filename
+
+    if not target_file.is_file():
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Knowledge file not found.")
+
+    target_file.unlink()
+    return {"status": "deleted", "filename": safe_filename}
 
 
 # --- Chat Sessions & Persistence Endpoints ---

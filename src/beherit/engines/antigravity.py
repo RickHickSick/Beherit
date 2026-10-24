@@ -76,10 +76,8 @@ class AntigravityEngine(BaseAgentEngine):
         # Prepare isolated environment
         env = self.auth_manager.get_sdk_environment(agent.slug)
 
-        # Build prompt incorporating Master Prompt & Instructions
-        full_system_context = agent.master_prompt.strip()
-        if agent.instructions and agent.instructions.strip():
-            full_system_context += f"\n\n## Operational Guidelines\n{agent.instructions.strip()}"
+        # Build prompt incorporating Master Prompt, Instructions, Knowledge Base & MCP
+        full_system_context = self.build_system_context(agent)
 
         # Combine system role context, conversation history, and user message
         prompt_parts = []
