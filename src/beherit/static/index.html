@@ -686,73 +686,234 @@
 
   <!-- MODAL: BAZA WIEDZY AGENTA (KNOWLEDGE BASE) -->
   <div x-show="openKnowledgeModal" class="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4" style="display: none;">
-    <div @click.away="openKnowledgeModal = false" class="bg-slate-900 border border-slate-800 w-full max-w-2xl rounded-2xl p-6 shadow-2xl space-y-4 max-h-[90vh] flex flex-col">
+    <div @click.away="openKnowledgeModal = false" 
+         @dragover.prevent="dragOverKnowledge = true" 
+         @dragleave.prevent="dragOverKnowledge = false" 
+         @drop.prevent="handleKnowledgeDrop($event)"
+         class="bg-slate-900 border border-slate-800 w-full max-w-4xl rounded-2xl p-6 shadow-2xl space-y-4 max-h-[92vh] flex flex-col relative">
+
+      <!-- Drag & Drop Visual Overlay -->
+      <div x-show="dragOverKnowledge" class="absolute inset-0 bg-emerald-950/90 backdrop-blur-sm border-2 border-dashed border-emerald-400 rounded-2xl z-30 flex flex-col items-center justify-center pointer-events-none">
+        <div class="text-4xl mb-2">📥</div>
+        <p class="text-base font-bold text-emerald-300">Upuść pliki tutaj</p>
+        <p class="text-xs text-emerald-400/80">Pliki PDF, zdjęcia, dokumenty zostaną automatycznie wgrane i zindeksowane przez RAG</p>
+      </div>
+
+      <!-- Modal Header -->
       <div class="flex items-center justify-between border-b border-slate-800 pb-3">
-        <div>
+        <div class="space-y-0.5">
           <h3 class="text-base font-bold text-slate-100 flex items-center gap-2">
             <span>📚</span> Baza Wiedzy: <span class="text-emerald-400" x-text="knowledgeTargetAgent ? knowledgeTargetAgent.name : ''"></span>
           </h3>
-          <p class="text-xs text-slate-400">Pliki w folderze knowledge/ są automatycznie wstrzykiwane i indeksowane przez lokalny moduł RAG.</p>
+          <p class="text-xs text-slate-400">Główne źródło informacji agenta (PDF, zdjęcia, dokumenty, wideo YouTube i linki WWW) o najwyższym priorytecie.</p>
         </div>
-        <button @click="openKnowledgeModal = false" class="text-slate-400 hover:text-slate-200">✕</button>
+        <div class="flex items-center gap-2">
+          <!-- Hidden file input -->
+          <input type="file" id="knowledgeFileInput" multiple @change="uploadKnowledgeFiles($event)" class="hidden" accept=".pdf,.png,.jpg,.jpeg,.webp,.gif,.svg,.md,.txt,.csv,.json,.yaml,.yml">
+          
+          <button @click="document.getElementById('knowledgeFileInput').click()" :disabled="isUploadingKnowledge" class="bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 font-semibold px-3 py-1.5 rounded-xl text-xs flex items-center gap-1.5 transition">
+            <span x-show="!isUploadingKnowledge">📤 Wgraj Pliki</span>
+            <span x-show="isUploadingKnowledge">⏳ Wgrywanie...</span>
+          </button>
+          
+          <button @click="knowledgeTab = 'add_link'; haptic();" class="bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 font-semibold px-3 py-1.5 rounded-xl text-xs flex items-center gap-1.5 transition">
+            <span>🔗 Dodaj Link / YT</span>
+          </button>
+
+          <button @click="createNewKnowledgeDoc()" class="bg-emerald-600 hover:bg-emerald-500 text-slate-950 font-bold px-3 py-1.5 rounded-xl text-xs flex items-center gap-1 transition">
+            <span>＋ Nowy MD</span>
+          </button>
+
+          <button @click="openKnowledgeModal = false" class="text-slate-400 hover:text-slate-200 p-1">✕</button>
+        </div>
       </div>
 
-      <!-- Knowledge Tabs -->
-      <div class="flex border-b border-slate-800 text-xs">
-        <button @click="knowledgeTab = 'editor'; haptic();" 
-                :class="knowledgeTab === 'editor' ? 'border-b-2 border-emerald-500 text-emerald-400 font-bold' : 'text-slate-400 hover:text-slate-200'"
-                class="pb-2 px-3 transition">
-          📝 Pliki & Edytor
+      <!-- Knowledge Navigation Tabs -->
+      <div class="flex border-b border-slate-800 text-xs gap-1">
+        <button @click="knowledgeTab = 'resources'; haptic();" 
+                :class="knowledgeTab === 'resources' ? 'border-b-2 border-emerald-500 text-emerald-400 font-bold' : 'text-slate-400 hover:text-slate-200'"
+                class="pb-2 px-3 transition flex items-center gap-1.5">
+          <span>📂</span> Baza Zasobów (<span x-text="knowledgeFiles.length"></span>)
+        </button>
+        <button @click="knowledgeTab = 'add_link'; haptic();" 
+                :class="knowledgeTab === 'add_link' ? 'border-b-2 border-emerald-500 text-emerald-400 font-bold' : 'text-slate-400 hover:text-slate-200'"
+                class="pb-2 px-3 transition flex items-center gap-1.5">
+          <span>🔗</span> Dodaj Link / Wideo YT
         </button>
         <button @click="knowledgeTab = 'rag'; haptic();" 
                 :class="knowledgeTab === 'rag' ? 'border-b-2 border-emerald-500 text-emerald-400 font-bold' : 'text-slate-400 hover:text-slate-200'"
                 class="pb-2 px-3 transition flex items-center gap-1.5">
-          <span>🔍</span> Test RAG (Semantyczne BM25)
+          <span>🔍</span> Test RAG (BM25)
         </button>
       </div>
 
-      <!-- TAB 1: Documents List & Editor -->
-      <div x-show="knowledgeTab === 'editor'" class="flex-1 flex flex-col sm:flex-row gap-4 min-h-[300px] overflow-hidden">
-        <!-- File list sidebar -->
-        <div class="w-full sm:w-1/3 border border-slate-800 rounded-xl p-2 bg-slate-950/60 overflow-y-auto custom-scroll space-y-1">
-          <div class="flex justify-between items-center px-2 py-1 mb-1 border-b border-slate-800/60">
-            <span class="text-[11px] font-bold text-slate-400 uppercase">Dokumenty</span>
-            <button @click="createNewKnowledgeDoc()" class="text-xs text-emerald-400 hover:text-emerald-300 font-bold">＋ Nowy</button>
+      <!-- TAB 1: Resources Management & Previews -->
+      <div x-show="knowledgeTab === 'resources'" class="flex-1 flex flex-col sm:flex-row gap-4 min-h-[380px] overflow-hidden">
+        <!-- Sidebar: Resource list with filter pills -->
+        <div class="w-full sm:w-2/5 flex flex-col border border-slate-800 rounded-xl bg-slate-950/60 overflow-hidden">
+          <!-- Filter pills -->
+          <div class="p-2 border-b border-slate-800/80 flex flex-wrap gap-1 bg-slate-900/60 text-[10px]">
+            <button @click="knowledgeFilter = 'all'" :class="knowledgeFilter === 'all' ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/40' : 'text-slate-400 hover:text-slate-200 border-transparent'" class="px-2 py-0.5 rounded-md border font-semibold transition">Wszystkie (<span x-text="knowledgeFiles.length"></span>)</button>
+            <button @click="knowledgeFilter = 'pdf'" :class="knowledgeFilter === 'pdf' ? 'bg-rose-500/20 text-rose-400 border-rose-500/40' : 'text-slate-400 hover:text-slate-200 border-transparent'" class="px-2 py-0.5 rounded-md border font-semibold transition">📄 PDF</button>
+            <button @click="knowledgeFilter = 'image'" :class="knowledgeFilter === 'image' ? 'bg-purple-500/20 text-purple-400 border-purple-500/40' : 'text-slate-400 hover:text-slate-200 border-transparent'" class="px-2 py-0.5 rounded-md border font-semibold transition">🖼️ Obrazy</button>
+            <button @click="knowledgeFilter = 'link'" :class="knowledgeFilter === 'link' ? 'bg-sky-500/20 text-sky-400 border-sky-500/40' : 'text-slate-400 hover:text-slate-200 border-transparent'" class="px-2 py-0.5 rounded-md border font-semibold transition">🔗 Linki</button>
+            <button @click="knowledgeFilter = 'document'" :class="knowledgeFilter === 'document' ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/40' : 'text-slate-400 hover:text-slate-200 border-transparent'" class="px-2 py-0.5 rounded-md border font-semibold transition">📝 Tekst</button>
           </div>
-          <template x-for="doc in knowledgeFiles" :key="doc.filename">
-            <div @click="loadKnowledgeDoc(doc.filename)"
-                 :class="activeDocName === doc.filename ? 'bg-slate-800 text-emerald-400 border-slate-700' : 'text-slate-300 hover:bg-slate-900 border-transparent'"
-                 class="px-2.5 py-2 rounded-lg text-xs cursor-pointer border flex items-center justify-between transition">
-              <span class="truncate" x-text="doc.filename"></span>
-              <button @click.stop="deleteKnowledgeDoc(doc.filename)" class="text-red-400 hover:text-red-300 ml-1 text-xs">✕</button>
-            </div>
-          </template>
-          <template x-if="knowledgeFiles.length === 0">
-            <p class="text-xs text-slate-500 p-2 text-center">Brak plików w bazie wiedzy.</p>
-          </template>
+
+          <!-- Files list -->
+          <div class="flex-1 overflow-y-auto custom-scroll p-2 space-y-1">
+            <template x-for="doc in filteredKnowledgeFiles()" :key="doc.filename">
+              <div @click="loadKnowledgeDoc(doc.filename)"
+                   :class="activeDocName === doc.filename ? 'bg-slate-800 text-slate-100 border-slate-700 shadow-sm' : 'text-slate-300 hover:bg-slate-900 border-transparent'"
+                   class="px-2.5 py-2 rounded-lg text-xs cursor-pointer border flex items-center justify-between transition group">
+                <div class="flex items-center gap-2 truncate min-w-0">
+                  <span x-text="getFileIcon(doc.file_type)" class="text-sm"></span>
+                  <div class="truncate">
+                    <p class="truncate font-medium" x-text="doc.filename"></p>
+                    <div class="flex items-center gap-1.5 text-[10px] text-slate-500">
+                      <span class="px-1 py-0.2 rounded border" :class="getFileBadge(doc.file_type).bg" x-text="getFileBadge(doc.file_type).label"></span>
+                      <span x-text="formatFileSize(doc.size_bytes)"></span>
+                    </div>
+                  </div>
+                </div>
+                <button @click.stop="deleteKnowledgeDoc(doc.filename)" title="Usuń plik" class="text-slate-500 hover:text-rose-400 opacity-60 group-hover:opacity-100 p-1 transition">✕</button>
+              </div>
+            </template>
+            <template x-if="filteredKnowledgeFiles().length === 0">
+              <div class="text-center py-8 text-slate-500 text-xs space-y-2">
+                <p>Brak zasobów w tym filtrze.</p>
+                <p class="text-[11px] text-slate-600">Przeciągnij pliki tutaj lub kliknij „Wgraj Pliki”.</p>
+              </div>
+            </template>
+          </div>
         </div>
 
-        <!-- Editor area -->
-        <div class="flex-1 flex flex-col space-y-2">
-          <input type="text" x-model="docEditorFilename" placeholder="np. wytyczne_finansowe.md" class="bg-slate-800 text-slate-100 px-3 py-1.5 rounded-lg border border-slate-700 outline-none text-xs font-mono">
-          <textarea x-model="docEditorContent" placeholder="Wklej dokumentację, tabele danych, cennik lub procedury operacyjne..." class="flex-1 w-full bg-slate-950 text-slate-200 p-3 rounded-lg border border-slate-800 outline-none font-mono text-xs resize-none"></textarea>
-          <div class="flex justify-end gap-2 pt-1">
-            <button @click="saveKnowledgeDoc()" class="bg-emerald-600 hover:bg-emerald-500 text-slate-950 font-bold px-4 py-1.5 rounded-lg text-xs transition">Zapisz Dokument</button>
-          </div>
+        <!-- Detail / Preview / Editor Pane -->
+        <div class="flex-1 flex flex-col border border-slate-800 rounded-xl bg-slate-950/60 p-4 overflow-hidden">
+          <!-- State 1: Image Resource -->
+          <template x-if="activeDoc && activeDoc.file_type === 'image'">
+            <div class="flex-1 flex flex-col space-y-3 overflow-y-auto custom-scroll">
+              <div class="flex items-center justify-between border-b border-slate-800 pb-2">
+                <div>
+                  <h4 class="text-xs font-bold text-purple-300 flex items-center gap-1.5">
+                    <span>🖼️</span> <span x-text="activeDoc.filename"></span>
+                  </h4>
+                  <p class="text-[11px] text-slate-400">Rozmiar: <span x-text="formatFileSize(activeDoc.size_bytes)"></span></p>
+                </div>
+                <a :href="'/api/agents/' + knowledgeTargetAgent.slug + '/knowledge/' + encodeURIComponent(activeDoc.filename) + '/raw'" target="_blank" class="bg-purple-600/20 text-purple-300 hover:bg-purple-600/30 border border-purple-500/40 text-[11px] font-bold px-3 py-1 rounded-lg transition flex items-center gap-1">
+                  Otwórz w pełnym rozmiarze ↗
+                </a>
+              </div>
+              <div class="flex-1 flex items-center justify-center bg-slate-950 rounded-xl p-4 border border-slate-800/80 min-h-[220px]">
+                <img :src="'/api/agents/' + knowledgeTargetAgent.slug + '/knowledge/' + encodeURIComponent(activeDoc.filename) + '/raw'" alt="Podgląd obrazu" class="max-h-[240px] max-w-full rounded-lg object-contain shadow-md">
+              </div>
+              <div class="bg-slate-900 border border-slate-800 rounded-xl p-3 text-xs text-slate-300 space-y-1">
+                <p class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Kontekst indeksowany w RAG</p>
+                <p class="font-mono text-[11px] text-slate-400 whitespace-pre-wrap" x-text="activeDoc.content"></p>
+              </div>
+            </div>
+          </template>
+
+          <!-- State 2: PDF Document -->
+          <template x-if="activeDoc && activeDoc.file_type === 'pdf'">
+            <div class="flex-1 flex flex-col space-y-3 overflow-y-auto custom-scroll">
+              <div class="flex items-center justify-between border-b border-slate-800 pb-2">
+                <div>
+                  <h4 class="text-xs font-bold text-rose-300 flex items-center gap-1.5">
+                    <span>📄</span> <span x-text="activeDoc.filename"></span>
+                  </h4>
+                  <p class="text-[11px] text-slate-400">Dokument PDF • Rozmiar: <span x-text="formatFileSize(activeDoc.size_bytes)"></span></p>
+                </div>
+                <a :href="'/api/agents/' + knowledgeTargetAgent.slug + '/knowledge/' + encodeURIComponent(activeDoc.filename) + '/raw'" target="_blank" class="bg-rose-600/20 text-rose-300 hover:bg-rose-600/30 border border-rose-500/40 text-[11px] font-bold px-3 py-1 rounded-lg transition flex items-center gap-1">
+                  Otwórz / Pobierz PDF ↗
+                </a>
+              </div>
+              <div class="flex-1 flex flex-col space-y-1.5 min-h-0">
+                <p class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Wyodrębniona treść tekstowa (Indeks RAG)</p>
+                <textarea readonly :value="activeDoc.content" class="flex-1 w-full bg-slate-950 text-slate-300 p-3 rounded-xl border border-slate-800 outline-none font-mono text-xs resize-none min-h-[200px]"></textarea>
+              </div>
+            </div>
+          </template>
+
+          <!-- State 3: Text, Markdown or Link Document -->
+          <template x-if="activeDoc && activeDoc.file_type !== 'image' && activeDoc.file_type !== 'pdf'">
+            <div class="flex-1 flex flex-col space-y-2">
+              <div class="flex items-center gap-2">
+                <input type="text" x-model="docEditorFilename" placeholder="np. procedury_wdrozeniowe.md" class="flex-1 bg-slate-800 text-slate-100 px-3 py-1.5 rounded-lg border border-slate-700 outline-none text-xs font-mono focus:border-emerald-500">
+                <button @click="saveKnowledgeDoc()" class="bg-emerald-600 hover:bg-emerald-500 text-slate-950 font-bold px-4 py-1.5 rounded-lg text-xs transition flex items-center gap-1">
+                  <span>💾 Zapisz</span>
+                </button>
+              </div>
+              <textarea x-model="docEditorContent" placeholder="Wklej dokumentację, instrukcje, tabele lub notatki dla agenta..." class="flex-1 w-full bg-slate-950 text-slate-200 p-3 rounded-lg border border-slate-800 outline-none font-mono text-xs resize-none"></textarea>
+            </div>
+          </template>
+
+          <!-- State 4: Nothing Selected -->
+          <template x-if="!activeDoc">
+            <div class="flex-1 flex flex-col items-center justify-center text-center p-6 text-slate-500 text-xs space-y-3">
+              <div class="text-3xl">📚</div>
+              <p class="font-semibold text-slate-300">Brak wybranego zasobu</p>
+              <p class="text-slate-500 max-w-sm">Wybierz dokument z listy po lewej stronie lub wgraj nowe pliki (PDF, obrazy, dokumenty, linki), aby wzbogacić wiedzę agenta.</p>
+              <button @click="document.getElementById('knowledgeFileInput').click()" class="bg-emerald-600/20 text-emerald-400 border border-emerald-500/30 px-3 py-1.5 rounded-xl font-bold transition hover:bg-emerald-600/30">Wgraj Plik Teraz</button>
+            </div>
+          </template>
         </div>
       </div>
 
-      <!-- TAB 2: RAG Search Testing -->
-      <div x-show="knowledgeTab === 'rag'" class="flex-1 flex flex-col space-y-3 min-h-[300px] overflow-hidden">
+      <!-- TAB 2: Add External Link / YouTube Video -->
+      <div x-show="knowledgeTab === 'add_link'" class="flex-1 flex flex-col space-y-3 min-h-[350px] overflow-y-auto custom-scroll border border-slate-800 rounded-xl bg-slate-950/60 p-4">
+        <div class="border-b border-slate-800 pb-2">
+          <h4 class="text-xs font-bold text-sky-400 flex items-center gap-1.5">
+            <span>🔗</span> Dodaj Źródło Zewnętrzne do Bazy Wiedzy
+          </h4>
+          <p class="text-xs text-slate-400">Agent otrzyma bezpośredni link oraz transkrypcję lub kluczowe notatki, do których będzie mógł się odwoływać.</p>
+        </div>
+
+        <div class="space-y-3 flex-1">
+          <div>
+            <label class="block text-xs font-semibold text-slate-300 mb-1">Adres URL *</label>
+            <input type="url" x-model="newKnowledgeLink.url" placeholder="https://www.youtube.com/watch?v=... lub https://docs.example.com/api" class="w-full bg-slate-800 text-slate-100 px-3 py-2 rounded-xl border border-slate-700 outline-none text-xs focus:border-sky-500 font-mono">
+          </div>
+
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <label class="block text-xs font-semibold text-slate-300 mb-1">Tytuł Zasobu *</label>
+              <input type="text" x-model="newKnowledgeLink.title" placeholder="np. Wykład o architekturze RAG lub Dokumentacja API" class="w-full bg-slate-800 text-slate-100 px-3 py-2 rounded-xl border border-slate-700 outline-none text-xs focus:border-sky-500">
+            </div>
+            <div>
+              <label class="block text-xs font-semibold text-slate-300 mb-1">Kategoria</label>
+              <select x-model="newKnowledgeLink.category" class="w-full bg-slate-800 text-slate-100 px-3 py-2 rounded-xl border border-slate-700 outline-none text-xs focus:border-sky-500">
+                <option value="Wideo YouTube">📺 Wideo YouTube</option>
+                <option value="Strona WWW / Dokumentacja">🌐 Strona WWW / Dokumentacja</option>
+                <option value="Repozytorium GitHub">💻 Repozytorium GitHub</option>
+                <option value="Artykuł / Publikacja">📰 Artykuł / Publikacja</option>
+              </select>
+            </div>
+          </div>
+
+          <div>
+            <label class="block text-xs font-semibold text-slate-300 mb-1">Kluczowe Notatki / Transkrypcja / Opis Zawartości</label>
+            <textarea x-model="newKnowledgeLink.description" rows="5" placeholder="Wklej streszczenie, transkrypcję wideo lub najważniejsze punkty, aby agent mógł je przeszukiwać i z nich korzystać..." class="w-full bg-slate-800 text-slate-100 p-3 rounded-xl border border-slate-700 outline-none text-xs focus:border-sky-500 font-mono resize-none"></textarea>
+          </div>
+        </div>
+
+        <div class="pt-2 border-t border-slate-800 flex justify-end gap-2">
+          <button @click="knowledgeTab = 'resources'" class="px-4 py-2 rounded-xl text-slate-400 hover:text-slate-200 text-xs">Anuluj</button>
+          <button @click="submitAddKnowledgeLink()" class="bg-sky-600 hover:bg-sky-500 text-slate-950 font-bold px-5 py-2 rounded-xl text-xs transition">Zapisz i Indeksuj w Bazie Wiedzy</button>
+        </div>
+      </div>
+
+      <!-- TAB 3: RAG Search Testing -->
+      <div x-show="knowledgeTab === 'rag'" class="flex-1 flex flex-col space-y-3 min-h-[350px] overflow-hidden">
         <div class="flex gap-2">
-          <input type="text" x-model="ragSearchQuery" @keydown.enter="searchKnowledgeRAG()" placeholder="Wpisz zapytanie testowe (np. limity bezpieczeństwa, kluczowe wskaźniki)..." class="flex-1 bg-slate-800 text-slate-100 px-3.5 py-2 rounded-xl border border-slate-700 outline-none text-xs focus:border-emerald-500 font-mono">
+          <input type="text" x-model="ragSearchQuery" @keydown.enter="searchKnowledgeRAG()" placeholder="Wpisz zapytanie testowe (np. cennik, procedury, limity, słowa kluczowe z PDF)..." class="flex-1 bg-slate-800 text-slate-100 px-3.5 py-2 rounded-xl border border-slate-700 outline-none text-xs focus:border-emerald-500 font-mono">
           <button @click="searchKnowledgeRAG()" class="bg-emerald-600 hover:bg-emerald-500 text-slate-950 font-bold px-4 py-2 rounded-xl text-xs transition">Szukaj</button>
         </div>
 
         <div class="flex-1 overflow-y-auto space-y-2 custom-scroll border border-slate-800/80 rounded-xl p-3 bg-slate-950/60">
           <template x-if="ragSearchResults.length === 0">
             <div class="text-center py-8 text-slate-500 text-xs">
-              <p>Wpisz zapytanie i kliknij „Szukaj”, aby przetestować indeksowanie chunków i trafność BM25.</p>
+              <p>Wpisz zapytanie i kliknij „Szukaj”, aby przetestować indeksowanie chunków i trafność BM25 ze wszystkich plików (PDF, tekst, linki, obrazy).</p>
             </div>
           </template>
 
@@ -768,7 +929,9 @@
         </div>
       </div>
 
-      <div class="pt-2 border-t border-slate-800 flex justify-end">
+      <!-- Modal Footer -->
+      <div class="pt-2 border-t border-slate-800 flex justify-between items-center text-xs text-slate-500">
+        <span>Przeciągnij i upuść pliki bezpośrednio na to okno, aby je wgrać.</span>
         <button @click="openKnowledgeModal = false" class="bg-slate-800 hover:bg-slate-700 text-slate-200 px-4 py-1.5 rounded-xl text-xs font-semibold">Zamknij</button>
       </div>
     </div>
@@ -1021,11 +1184,21 @@
         // Knowledge Base Modal
         openKnowledgeModal: false,
         knowledgeTargetAgent: null,
-        knowledgeTab: 'editor',
+        knowledgeTab: 'resources',
         knowledgeFiles: [],
+        knowledgeFilter: 'all',
+        activeDoc: null,
         activeDocName: '',
         docEditorFilename: '',
         docEditorContent: '',
+        isUploadingKnowledge: false,
+        dragOverKnowledge: false,
+        newKnowledgeLink: {
+          url: '',
+          title: '',
+          description: '',
+          category: 'Wideo YouTube'
+        },
         ragSearchQuery: '',
         ragSearchResults: [],
 
@@ -1084,8 +1257,11 @@
           await this.detectLocalAuth();
           await this.loadAgents();
           if (this.agents.length > 0) {
-            this.selectAgentForChat(this.agents[0]);
+            this.activeAgent = this.agents[0];
+            this.selectedAgentSlug = this.agents[0].slug;
+            await this.loadChatSessions(this.agents[0].slug);
           }
+          this.currentView = 'dashboard';
         },
 
         async submitPinAuth() {
@@ -1542,9 +1718,13 @@
           this.haptic();
           this.knowledgeTargetAgent = agent;
           this.openKnowledgeModal = true;
+          this.knowledgeTab = 'resources';
+          this.knowledgeFilter = 'all';
+          this.activeDoc = null;
           this.activeDocName = '';
           this.docEditorFilename = '';
           this.docEditorContent = '';
+          this.dragOverKnowledge = false;
           await this.loadKnowledgeFiles();
         },
 
@@ -1555,8 +1735,15 @@
             if (res.ok) {
               const data = await res.json();
               this.knowledgeFiles = data.files || [];
-              if (this.knowledgeFiles.length > 0 && !this.activeDocName) {
-                this.loadKnowledgeDoc(this.knowledgeFiles[0].filename);
+              if (this.knowledgeFiles.length > 0) {
+                const found = this.activeDocName ? this.knowledgeFiles.find(f => f.filename === this.activeDocName) : null;
+                const target = found || this.knowledgeFiles[0];
+                await this.loadKnowledgeDoc(target.filename);
+              } else {
+                this.activeDoc = null;
+                this.activeDocName = '';
+                this.docEditorFilename = '';
+                this.docEditorContent = '';
               }
             }
           } catch (e) {
@@ -1568,10 +1755,13 @@
           this.haptic();
           this.activeDocName = filename;
           this.docEditorFilename = filename;
+          const meta = this.knowledgeFiles.find(f => f.filename === filename) || { filename, file_type: 'document' };
+          this.activeDoc = { ...meta };
           try {
             const res = await this.apiFetch(`/api/agents/${this.knowledgeTargetAgent.slug}/knowledge/${encodeURIComponent(filename)}`);
             if (res.ok) {
               const data = await res.json();
+              this.activeDoc = { ...this.activeDoc, ...data };
               this.docEditorContent = data.content || '';
             }
           } catch (e) {
@@ -1581,9 +1771,11 @@
 
         createNewKnowledgeDoc() {
           this.haptic();
-          this.activeDocName = '';
+          this.knowledgeTab = 'resources';
+          this.activeDoc = { filename: 'nowy_dokument.md', file_type: 'document', is_binary: false };
+          this.activeDocName = 'nowy_dokument.md';
           this.docEditorFilename = 'nowy_dokument.md';
-          this.docEditorContent = '';
+          this.docEditorContent = '# Nowy Dokument\n\nWprowadź wytyczne, procedury lub fakty dla agenta...';
         },
 
         async saveKnowledgeDoc() {
@@ -1601,8 +1793,9 @@
 
             if (res.ok) {
               this.showToast(`Zapisano ${this.docEditorFilename}`);
+              const targetName = this.docEditorFilename.trim();
               await this.loadKnowledgeFiles();
-              this.activeDocName = this.docEditorFilename.trim();
+              await this.loadKnowledgeDoc(targetName);
             } else {
               const err = await res.json();
               alert(`Błąd zapisu: ${err.detail || 'Błąd'}`);
@@ -1614,7 +1807,7 @@
 
         async deleteKnowledgeDoc(filename) {
           this.haptic();
-          if (!confirm(`Czy usunąć dokument "${filename}" z bazy wiedzy?`)) return;
+          if (!confirm(`Czy usunąć zasób "${filename}" z bazy wiedzy agenta?`)) return;
           try {
             const res = await this.apiFetch(`/api/agents/${this.knowledgeTargetAgent.slug}/knowledge/${encodeURIComponent(filename)}`, {
               method: 'DELETE'
@@ -1622,6 +1815,7 @@
             if (res.ok) {
               this.showToast(`Usunięto ${filename}`);
               if (this.activeDocName === filename) {
+                this.activeDoc = null;
                 this.activeDocName = '';
                 this.docEditorFilename = '';
                 this.docEditorContent = '';
@@ -1630,6 +1824,119 @@
             }
           } catch (e) {
             alert(e.message);
+          }
+        },
+
+        async uploadKnowledgeFiles(event) {
+          const files = event.target.files;
+          if (!files || files.length === 0 || !this.knowledgeTargetAgent) return;
+          await this.processFileUpload(files);
+          event.target.value = '';
+        },
+
+        async handleKnowledgeDrop(event) {
+          this.dragOverKnowledge = false;
+          const files = event.dataTransfer ? event.dataTransfer.files : null;
+          if (!files || files.length === 0 || !this.knowledgeTargetAgent) return;
+          await this.processFileUpload(files);
+        },
+
+        async processFileUpload(fileList) {
+          this.isUploadingKnowledge = true;
+          this.haptic();
+          try {
+            const formData = new FormData();
+            for (let i = 0; i < fileList.length; i++) {
+              formData.append('files', fileList[i]);
+            }
+            const res = await fetch(`/api/agents/${this.knowledgeTargetAgent.slug}/knowledge/upload`, {
+              method: 'POST',
+              headers: this.authHeaders(),
+              body: formData
+            });
+            if (res.ok) {
+              const data = await res.json();
+              this.showToast(`Wgrano ${data.count} plik(ów) do bazy wiedzy`);
+              await this.loadKnowledgeFiles();
+              if (data.uploaded_files && data.uploaded_files.length > 0) {
+                await this.loadKnowledgeDoc(data.uploaded_files[0]);
+              }
+            } else {
+              const err = await res.json();
+              alert(`Błąd wgrywania: ${err.detail || 'Nie udało się wgrać plików'}`);
+            }
+          } catch (e) {
+            alert(`Błąd wgrywania: ${e.message}`);
+          } finally {
+            this.isUploadingKnowledge = false;
+          }
+        },
+
+        async submitAddKnowledgeLink() {
+          this.haptic();
+          if (!this.newKnowledgeLink.url.trim() || !this.newKnowledgeLink.title.trim()) {
+            alert('Podaj adres URL i tytuł źródła zewnętrznego.');
+            return;
+          }
+          try {
+            const res = await this.apiFetch(`/api/agents/${this.knowledgeTargetAgent.slug}/knowledge/link`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                url: this.newKnowledgeLink.url.trim(),
+                title: this.newKnowledgeLink.title.trim(),
+                description: this.newKnowledgeLink.description.trim(),
+                category: this.newKnowledgeLink.category
+              })
+            });
+            if (res.ok) {
+              const data = await res.json();
+              this.showToast(`Dodano link: ${data.title}`);
+              this.newKnowledgeLink = { url: '', title: '', description: '', category: 'Wideo YouTube' };
+              this.knowledgeTab = 'resources';
+              await this.loadKnowledgeFiles();
+              if (data.filename) {
+                await this.loadKnowledgeDoc(data.filename);
+              }
+            } else {
+              const err = await res.json();
+              alert(`Błąd: ${err.detail || 'Nie udało się dodać linku'}`);
+            }
+          } catch (e) {
+            alert(`Błąd: ${e.message}`);
+          }
+        },
+
+        filteredKnowledgeFiles() {
+          if (this.knowledgeFilter === 'all') return this.knowledgeFiles;
+          return this.knowledgeFiles.filter(f => f.file_type === this.knowledgeFilter);
+        },
+
+        formatFileSize(bytes) {
+          if (!bytes || bytes === 0) return '0 B';
+          const k = 1024;
+          const sizes = ['B', 'KB', 'MB', 'GB'];
+          const i = Math.floor(Math.log(bytes) / Math.log(k));
+          return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
+        },
+
+        getFileBadge(type) {
+          switch (type) {
+            case 'pdf': return { label: 'PDF', bg: 'bg-rose-500/10 text-rose-400 border-rose-500/30' };
+            case 'image': return { label: 'OBRAZ', bg: 'bg-purple-500/10 text-purple-400 border-purple-500/30' };
+            case 'link': return { label: 'LINK', bg: 'bg-sky-500/10 text-sky-400 border-sky-500/30' };
+            case 'document': return { label: 'DOKUMENT', bg: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30' };
+            default: return { label: 'PLIK', bg: 'bg-slate-500/10 text-slate-400 border-slate-500/30' };
+          }
+        },
+
+        getFileIcon(type) {
+          switch (type) {
+            case 'pdf': return '📄';
+            case 'image': return '🖼️';
+            case 'link': return '🔗';
+            case 'document': return '📝';
+            default: return '📁';
           }
         },
 

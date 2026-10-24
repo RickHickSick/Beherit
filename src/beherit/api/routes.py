@@ -3,10 +3,13 @@
 import asyncio
 import hmac
 import json
+import re
+import time
 from pathlib import Path
 from typing import Any
 
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, File, HTTPException, UploadFile, status
+from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 from sse_starlette.sse import EventSourceResponse
 
@@ -74,6 +77,13 @@ class UpdateAgentRequest(BaseModel):
 class SaveKnowledgeRequest(BaseModel):
     filename: str = Field(..., min_length=1, max_length=100)
     content: str = Field(default="")
+
+
+class AddKnowledgeLinkRequest(BaseModel):
+    url: str = Field(..., min_length=3, max_length=1000)
+    title: str = Field(..., min_length=1, max_length=200)
+    description: str | None = Field(default="")
+    category: str | None = Field(default=None)
 
 
 class KnowledgeSearchRequest(BaseModel):
@@ -458,7 +468,7 @@ async def verify_system_token(payload: VerifyTokenRequest):
 
 @router.get("/{slug}/knowledge")
 async def list_agent_knowledge(slug: str):
-    """List documents stored in the agent's knowledge base directory."""
+    """List documents and assets stored in the agent's knowledge base directory."""
     agent = repo.load_agent(slug)
     if not agent:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Agent not found.")
@@ -471,17 +481,30 @@ async def list_agent_knowledge(slug: str):
     for f in sorted(knowledge_dir.iterdir()):
         if f.is_file():
             stat = f.stat()
+            ext = f.suffix.lower()
+            if ext == ".pdf":
+                file_type = "pdf"
+            elif ext in {".png", ".jpg", ".jpeg", ".webp", ".gif", ".svg"}:
+                file_type = "image"
+            elif f.name.startswith("link_"):
+                file_type = "link"
+            elif ext in {".md", ".txt", ".json", ".yaml", ".yml", ".csv"}:
+                file_type = "document"
+            else:
+                file_type = "other"
+
             files.append({
                 "filename": f.name,
                 "size_bytes": stat.st_size,
                 "updated_at": stat.st_mtime,
+                "file_type": file_type,
             })
     return {"slug": slug, "files": files}
 
 
 @router.get("/{slug}/knowledge/{filename}")
 async def get_agent_knowledge_file(slug: str, filename: str):
-    """Read a specific document from the agent's knowledge base."""
+    """Read a specific document or asset metadata from the agent's knowledge base."""
     agent = repo.load_agent(slug)
     if not agent:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Agent not found.")
@@ -493,8 +516,149 @@ async def get_agent_knowledge_file(slug: str, filename: str):
     if not target_file.is_file():
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Knowledge file not found.")
 
+    ext = target_file.suffix.lower()
+    is_binary = ext in {".pdf", ".png", ".jpg", ".jpeg", ".webp", ".gif", ".svg"}
+
+    if is_binary:
+        from beherit.core.rag import extract_file_content
+
+        extracted = extract_file_content(target_file)
+        return {
+            "filename": safe_filename,
+            "is_binary": True,
+            "file_type": "pdf" if ext == ".pdf" else "image",
+            "size_bytes": target_file.stat().st_size,
+            "content": extracted,
+        }
+
     content = target_file.read_text(encoding="utf-8", errors="replace")
-    return {"filename": safe_filename, "content": content}
+    return {
+        "filename": safe_filename,
+        "is_binary": False,
+        "file_type": "link" if safe_filename.startswith("link_") else "document",
+        "size_bytes": target_file.stat().st_size,
+        "content": content,
+    }
+
+
+@router.get("/{slug}/knowledge/{filename}/raw")
+async def get_raw_knowledge_file(slug: str, filename: str):
+    """Serve raw binary asset (PDF, Image) for direct inline display or download in browser."""
+    agent = repo.load_agent(slug)
+    if not agent:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Agent not found.")
+
+    safe_filename = Path(filename).name
+    agent_dir = Path(agent.file_path).parent if agent.file_path else (repo.base_dir / slug)
+    target_file = agent_dir / "knowledge" / safe_filename
+
+    if not target_file.is_file():
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Knowledge file not found.")
+
+    ext = target_file.suffix.lower()
+    media_types = {
+        ".pdf": "application/pdf",
+        ".png": "image/png",
+        ".jpg": "image/jpeg",
+        ".jpeg": "image/jpeg",
+        ".webp": "image/webp",
+        ".gif": "image/gif",
+        ".svg": "image/svg+xml",
+        ".md": "text/markdown; charset=utf-8",
+        ".txt": "text/plain; charset=utf-8",
+        ".json": "application/json",
+        ".csv": "text/csv; charset=utf-8",
+    }
+    media_type = media_types.get(ext, "application/octet-stream")
+
+    return FileResponse(
+        path=target_file,
+        media_type=media_type,
+        filename=safe_filename,
+        headers={"Content-Disposition": f"inline; filename=\"{safe_filename}\""},
+    )
+
+
+@router.post("/{slug}/knowledge/upload")
+async def upload_agent_knowledge_files(slug: str, files: list[UploadFile] = File(...)):
+    """Upload one or more files (PDF, images, text, markdown) to the agent's knowledge base."""
+    agent = repo.load_agent(slug)
+    if not agent:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Agent not found.")
+
+    agent_dir = Path(agent.file_path).parent if agent.file_path else (repo.base_dir / slug)
+    knowledge_dir = agent_dir / "knowledge"
+    knowledge_dir.mkdir(parents=True, exist_ok=True)
+
+    uploaded = []
+    for f in files:
+        safe_filename = Path(f.filename or "uploaded_file").name
+        if not safe_filename or safe_filename.startswith("."):
+            continue
+        target_file = knowledge_dir / safe_filename
+        data = await f.read()
+        target_file.write_bytes(data)
+        uploaded.append(safe_filename)
+
+    # Sync RAG index
+    from beherit.core.rag import KnowledgeRAG
+
+    rag = KnowledgeRAG(db_manager=db_mgr)
+    total_chunks = rag.sync_agent_knowledge(slug, knowledge_dir)
+
+    return {
+        "status": "uploaded",
+        "count": len(uploaded),
+        "uploaded_files": uploaded,
+        "total_chunks": total_chunks,
+    }
+
+
+@router.post("/{slug}/knowledge/link")
+async def add_agent_knowledge_link(slug: str, payload: AddKnowledgeLinkRequest):
+    """Add external reference link (Website, documentation, YouTube video) to the agent's knowledge base."""
+    agent = repo.load_agent(slug)
+    if not agent:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Agent not found.")
+
+    agent_dir = Path(agent.file_path).parent if agent.file_path else (repo.base_dir / slug)
+    knowledge_dir = agent_dir / "knowledge"
+    knowledge_dir.mkdir(parents=True, exist_ok=True)
+
+    is_yt = "youtube.com" in payload.url or "youtu.be" in payload.url
+    cat = payload.category or ("Wideo YouTube" if is_yt else "Strona WWW / Dokumentacja")
+
+    # Clean title to valid filename
+    clean_slug = re.sub(r"[^\w\-_]", "_", payload.title.strip().lower())[:40].strip("_")
+    if not clean_slug:
+        clean_slug = f"source_{int(time.time())}"
+    filename = f"link_{clean_slug}.md"
+    target_file = knowledge_dir / filename
+
+    notes_section = payload.description.strip() if payload.description and payload.description.strip() else "(Brak dodatkowych notatek)"
+    md_content = (
+        f"# 🔗 {payload.title.strip()}\n\n"
+        f"- **Kategoria:** {cat}\n"
+        f"- **Adres URL:** {payload.url.strip()}\n"
+        f"- **Data dodania:** {time.strftime('%Y-%m-%d %H:%M:%S')}\n\n"
+        f"## Opis / Transkrypcja / Notatki Kluczowe\n"
+        f"{notes_section}\n"
+    )
+
+    target_file.write_text(md_content, encoding="utf-8")
+
+    from beherit.core.rag import KnowledgeRAG
+
+    rag = KnowledgeRAG(db_manager=db_mgr)
+    total_chunks = rag.sync_agent_knowledge(slug, knowledge_dir)
+
+    return {
+        "status": "created",
+        "filename": filename,
+        "title": payload.title,
+        "url": payload.url,
+        "total_chunks": total_chunks,
+    }
 
 
 @router.post("/{slug}/knowledge")
@@ -514,25 +678,45 @@ async def save_agent_knowledge_file(slug: str, payload: SaveKnowledgeRequest):
     target_file = knowledge_dir / safe_filename
 
     target_file.write_text(payload.content, encoding="utf-8")
-    return {"status": "saved", "filename": safe_filename, "size_bytes": len(payload.content)}
+
+    # Sync RAG
+    from beherit.core.rag import KnowledgeRAG
+
+    rag = KnowledgeRAG(db_manager=db_mgr)
+    total_chunks = rag.sync_agent_knowledge(slug, knowledge_dir)
+
+    return {
+        "status": "saved",
+        "filename": safe_filename,
+        "size_bytes": len(payload.content),
+        "total_chunks": total_chunks,
+    }
 
 
 @router.delete("/{slug}/knowledge/{filename}")
 async def delete_agent_knowledge_file(slug: str, filename: str):
-    """Delete a document from the agent's knowledge base."""
+    """Delete a document or asset from the agent's knowledge base."""
     agent = repo.load_agent(slug)
     if not agent:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Agent not found.")
 
     safe_filename = Path(filename).name
     agent_dir = Path(agent.file_path).parent if agent.file_path else (repo.base_dir / slug)
-    target_file = agent_dir / "knowledge" / safe_filename
+    knowledge_dir = agent_dir / "knowledge"
+    target_file = knowledge_dir / safe_filename
 
     if not target_file.is_file():
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Knowledge file not found.")
 
     target_file.unlink()
-    return {"status": "deleted", "filename": safe_filename}
+
+    # Sync RAG
+    from beherit.core.rag import KnowledgeRAG
+
+    rag = KnowledgeRAG(db_manager=db_mgr)
+    total_chunks = rag.sync_agent_knowledge(slug, knowledge_dir)
+
+    return {"status": "deleted", "filename": safe_filename, "total_chunks": total_chunks}
 
 
 @router.post("/{slug}/knowledge/search")

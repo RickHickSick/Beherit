@@ -12,21 +12,21 @@ class BaseAgentEngine(ABC):
 
     @classmethod
     def build_system_context(cls, agent: AgentModel, query: str | None = None) -> str:
-        """Construct full system context with master prompt, instructions, RAG knowledge base, and MCP servers."""
+        """Construct full system context with master prompt, high-priority RAG knowledge base, instructions, and MCP servers."""
         parts = []
         if agent.master_prompt:
             parts.append(agent.master_prompt.strip())
 
-        if agent.instructions and agent.instructions.strip():
-            parts.append(f"## Operational Guidelines\n{agent.instructions.strip()}")
-
-        # Ingest knowledge documents using Local RAG
+        # Ingest knowledge documents using Local RAG (Primary context / Source of Truth)
         from beherit.core.rag import KnowledgeRAG
 
         rag = KnowledgeRAG()
         knowledge_context = rag.build_knowledge_context(agent, query=query)
         if knowledge_context:
             parts.append(knowledge_context)
+
+        if agent.instructions and agent.instructions.strip():
+            parts.append(f"## Operational Guidelines\n{agent.instructions.strip()}")
 
         # Add MCP servers information if configured
         if agent.mcp_servers:

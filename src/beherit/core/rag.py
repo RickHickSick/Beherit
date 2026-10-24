@@ -1,5 +1,6 @@
 """Lightweight Local Vector & Semantic Search (Local RAG) for Agent Knowledge Base."""
 
+import logging
 import re
 import sqlite3
 import time
@@ -8,6 +9,62 @@ from typing import Any
 
 from beherit.core.database import DatabaseManager
 from beherit.models.agent import AgentModel
+
+logger = logging.getLogger(__name__)
+
+TEXT_EXTENSIONS = {".md", ".txt", ".json", ".yaml", ".yml", ".csv"}
+PDF_EXTENSIONS = {".pdf"}
+IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".webp", ".gif", ".svg"}
+ALL_KNOWLEDGE_EXTENSIONS = TEXT_EXTENSIONS | PDF_EXTENSIONS | IMAGE_EXTENSIONS
+
+
+def extract_file_content(file_path: Path) -> str:
+    """Extract plain text or metadata description from a document, PDF, or image file."""
+    ext = file_path.suffix.lower()
+
+    # 1. Text & structured documents
+    if ext in TEXT_EXTENSIONS:
+        try:
+            return file_path.read_text(encoding="utf-8", errors="replace")
+        except Exception as e:
+            logger.warning(f"Failed to read text file {file_path}: {e}")
+            return ""
+
+    # 2. PDF documents
+    if ext in PDF_EXTENSIONS:
+        try:
+            from pypdf import PdfReader
+
+            reader = PdfReader(str(file_path))
+            pages_text = []
+            for idx, page in enumerate(reader.pages):
+                txt = page.extract_text()
+                if txt and txt.strip():
+                    pages_text.append(f"--- [Strona {idx + 1} dokumentu {file_path.name}] ---\n{txt.strip()}")
+            if pages_text:
+                return "\n\n".join(pages_text)
+            else:
+                return (
+                    f"### [Dokument PDF: {file_path.name}]\n"
+                    f"Plik PDF w bazie wiedzy agenta ({len(reader.pages)} stron, {file_path.stat().st_size} bajtów). "
+                    "Dokument binarny/skan bez wydzielonej warstwy tekstowej."
+                )
+        except Exception as e:
+            logger.warning(f"Error parsing PDF file {file_path}: {e}")
+            return f"### [Dokument PDF: {file_path.name}]\nPlik PDF w bazie wiedzy agenta ({file_path.stat().st_size} bajtów)."
+
+    # 3. Image files
+    if ext in IMAGE_EXTENSIONS:
+        size_kb = round(file_path.stat().st_size / 1024, 1)
+        return (
+            f"### [Plik graficzny / Obraz: {file_path.name}]\n"
+            f"Zasób graficzny w bazie wiedzy agenta. Format: {ext.upper()[1:]}. Rozmiar: {size_kb} KB. "
+            f"Ścieżka relatywna: knowledge/{file_path.name}. "
+            "Plik dostępny w katalogu agenta do wglądu i analizy kontekstowej."
+        )
+
+    # 4. Fallback
+    return f"### [Plik: {file_path.name}]\nPlik binarny w bazie wiedzy agenta ({file_path.stat().st_size} bajtów)."
 
 
 class KnowledgeChunker:
@@ -100,9 +157,7 @@ class KnowledgeRAG:
 
             current_files = {}
             for doc_file in knowledge_dir.iterdir():
-                if doc_file.is_file() and doc_file.suffix.lower() in (
-                    ".md", ".txt", ".json", ".yaml", ".yml", ".csv"
-                ):
+                if doc_file.is_file() and doc_file.suffix.lower() in ALL_KNOWLEDGE_EXTENSIONS:
                     current_files[doc_file.name] = doc_file
 
             # Purge deleted files from DB
@@ -121,9 +176,8 @@ class KnowledgeRAG:
                     conn.execute("DELETE FROM knowledge_chunks WHERE agent_slug = ? AND doc_name = ?", (agent_slug, doc_name))
                     conn.execute("DELETE FROM knowledge_fts WHERE agent_slug = ? AND doc_name = ?", (agent_slug, doc_name))
 
-                    try:
-                        content = doc_file.read_text(encoding="utf-8", errors="replace")
-                    except Exception:
+                    content = extract_file_content(doc_file)
+                    if not content or not content.strip():
                         continue
 
                     chunks = self.chunker.split_text(content)
@@ -240,12 +294,11 @@ class KnowledgeRAG:
         self,
         agent: AgentModel,
         query: str | None = None,
-        max_total_chars: int = 10000,
+        max_total_chars: int = 12000,
     ) -> str:
         """
         Build optimized knowledge context for the agent turn.
-        If knowledge is small, includes entire documents.
-        If knowledge is large or query is provided, uses semantic RAG retrieval.
+        Presents the knowledge base as the primary, highest-priority source of truth.
         """
         if not agent.file_path:
             return ""
@@ -258,56 +311,108 @@ class KnowledgeRAG:
         # Sync knowledge index
         self.sync_agent_knowledge(agent.slug, knowledge_dir)
 
-        # Inspect total raw size
-        docs = []
-        total_raw_len = 0
-        for doc in sorted(knowledge_dir.iterdir()):
-            if doc.is_file() and doc.suffix.lower() in (".md", ".txt", ".json", ".yaml", ".yml", ".csv"):
-                try:
-                    text = doc.read_text(encoding="utf-8", errors="replace")
-                    docs.append((doc.name, text))
-                    total_raw_len += len(text)
-                except Exception:
-                    pass
-
-        if not docs:
+        # Categorize all files in knowledge directory
+        all_files = sorted(knowledge_dir.iterdir())
+        if not all_files:
             return ""
 
-        # If knowledge base is small (< 6000 chars) and no specific query, dump all files
-        if total_raw_len <= 6000 and not query:
+        docs_list = []
+        pdf_list = []
+        img_list = []
+        link_list = []
+        other_list = []
+
+        total_extracted_len = 0
+        extracted_docs: list[tuple[str, str, str]] = []  # (name, type, content)
+
+        for f in all_files:
+            if not f.is_file():
+                continue
+            ext = f.suffix.lower()
+            size_kb = round(f.stat().st_size / 1024, 1)
+
+            if ext in PDF_EXTENSIONS:
+                pdf_list.append(f"- 📄 **{f.name}** (PDF, {size_kb} KB)")
+                content = extract_file_content(f)
+                extracted_docs.append((f.name, "PDF", content))
+                total_extracted_len += len(content)
+            elif ext in IMAGE_EXTENSIONS:
+                img_list.append(f"- 🖼️ **{f.name}** (Obraz/Grafika, {size_kb} KB)")
+                content = extract_file_content(f)
+                extracted_docs.append((f.name, "Obraz", content))
+                total_extracted_len += len(content)
+            elif f.name.startswith("link_") and ext in TEXT_EXTENSIONS:
+                link_list.append(f"- 🔗 **{f.name}** (Zewnętrzne Źródło / Link)")
+                content = extract_file_content(f)
+                extracted_docs.append((f.name, "Link", content))
+                total_extracted_len += len(content)
+            elif ext in TEXT_EXTENSIONS:
+                docs_list.append(f"- 📝 **{f.name}** (Dokument tekstowy, {size_kb} KB)")
+                content = extract_file_content(f)
+                extracted_docs.append((f.name, "Dokument", content))
+                total_extracted_len += len(content)
+            else:
+                other_list.append(f"- 📁 **{f.name}** ({size_kb} KB)")
+
+        if not extracted_docs:
+            return ""
+
+        # Build catalog section
+        catalog_lines = ["### 📂 Katalog Zasobów w Bazie Wiedzy (knowledge/):"]
+        if docs_list:
+            catalog_lines.append("**Dokumenty i procedury:**\n" + "\n".join(docs_list))
+        if pdf_list:
+            catalog_lines.append("**Materiały PDF:**\n" + "\n".join(pdf_list))
+        if img_list:
+            catalog_lines.append("**Pliki graficzne i zdjęcia:**\n" + "\n".join(img_list))
+        if link_list:
+            catalog_lines.append("**Linki zewnętrzne i wideo (YouTube / WWW):**\n" + "\n".join(link_list))
+        if other_list:
+            catalog_lines.append("**Inne pliki:**\n" + "\n".join(other_list))
+
+        catalog_str = "\n\n".join(catalog_lines)
+
+        header = (
+            "## 📚 Baza Wiedzy Agenta (NAJWYŻSZY PRIORYTET / GŁÓWNE ŹRÓDŁO PRAWDY)\n"
+            "Poniższa baza wiedzy to Twoje PIERWSZORZĘDNE i NAJWAŻNIEJSZE źródło informacji. "
+            "W pierwszej kolejności bazuj na poniższych dokumentach, plikach i załącznikach. "
+            "Mają one bezwzględny priorytet przed Twoją wiedzą ogólną. Zawsze odwołuj się do faktów, "
+            "wytycznych i materiałów z bazy wiedzy."
+        )
+
+        # Small knowledge base: include all documents and catalog
+        if total_extracted_len <= 7000 and not query:
             formatted = []
-            for name, content in docs:
-                formatted.append(f"### [Baza Wiedzy: {name}]\n{content[:6000]}")
-            return "## Baza Wiedzy Agenta (Dokumenty Referencyjne)\n" + "\n\n".join(formatted)
+            for name, dtype, content in extracted_docs:
+                formatted.append(f"#### [{dtype}: {name}]\n{content[:7000]}")
+            return f"{header}\n\n{catalog_str}\n\n### 📄 Pełna Zawartość Bazy Wiedzy:\n\n" + "\n\n".join(formatted)
 
         # RAG Search Mode
         search_query = query or (agent.master_prompt + " " + (agent.instructions or ""))
         matches = self.search(agent.slug, query=search_query, top_k=6)
 
         if not matches:
-            # Fallback: take first chunk of each doc
             formatted = []
             chars_used = 0
-            for name, content in docs:
+            for name, dtype, content in extracted_docs:
                 chunk = content[:1500]
-                formatted.append(f"### [Dokument: {name}]\n{chunk}")
+                formatted.append(f"#### [{dtype}: {name}]\n{chunk}")
                 chars_used += len(chunk)
                 if chars_used >= max_total_chars:
                     break
-            return "## Baza Wiedzy Agenta (Podgląd Dokumentów)\n" + "\n\n".join(formatted)
+            return f"{header}\n\n{catalog_str}\n\n### 📄 Podgląd Dokumentów:\n\n" + "\n\n".join(formatted)
 
         rag_parts = [
-            "## Baza Wiedzy Agenta (Lokalny Indeks RAG - Wyszukiwanie Semantyczne)",
-            f"*Dopasowano {len(matches)} najbardziej relewantnych fragmentów do zapytania.*\n",
+            header,
+            catalog_str,
+            "### 🔍 Dopasowane Fragmenty z Bazy Wiedzy (Wyszukiwanie RAG):",
+            f"*Dopasowano {len(matches)} najbardziej relewantnych fragmentów do aktualnego zapytania.*",
         ]
 
         for m in matches:
             rel_pct = int(m["score"] * 100)
             rag_parts.append(
-                f"### [Źródło: {m['doc_name']} | Fragment #{m['chunk_index'] + 1}] (Relewantność: {rel_pct}%)\n{m['content']}"
+                f"#### [Źródło: {m['doc_name']} | Fragment #{m['chunk_index'] + 1}] (Relewantność: {rel_pct}%)\n{m['content']}"
             )
-
-        doc_names = ", ".join(d[0] for d in docs)
-        rag_parts.append(f"\n*(Katalog wszystkich plików w knowledge/: {doc_names})*")
 
         return "\n\n".join(rag_parts)
