@@ -7,6 +7,8 @@ from collections.abc import AsyncIterator
 from pathlib import Path
 from typing import Any
 
+import httpx
+
 from beherit.core.auth_manager import AgentAuthManager
 from beherit.engines.base import BaseAgentEngine
 from beherit.models.agent import AgentModel, AuthStatus, EngineType
@@ -196,12 +198,90 @@ class AntigravityEngine(BaseAgentEngine):
                             pass
 
         else:
-            # Fallback simulator for unit tests or environments without agy binary
-            yield {"event": "thought", "data": f"Processing turn for {agent.name} with prompt context..."}
-            context_summary = f"(Identity: {agent.master_prompt[:30]}...)" if agent.master_prompt else ""
-            simulated_response = f"Echo from {agent.name} {context_summary}: Processed '{message}' securely."
-            for word in simulated_response.split():
-                yield {"event": "token", "data": f"{word} "}
-                await asyncio.sleep(0.02)
+            token = self.auth_manager.get_token(agent.slug) or env.get("GEMINI_API_KEY", "")
+            if token and (token.startswith("AIzaSy") or token.startswith("gemini_")):
+                async for chunk in self._stream_gemini_api(agent, message, history, token, full_system_context):
+                    yield chunk
+            else:
+                yield {"event": "thought", "data": f"Processing turn for {agent.name} with prompt context..."}
+                context_summary = f"(Identity: {agent.master_prompt[:30]}...)" if agent.master_prompt else ""
+                simulated_response = f"Echo from {agent.name} {context_summary}: Processed '{message}' securely."
+                for word in simulated_response.split():
+                    yield {"event": "token", "data": f"{word} "}
+                    await asyncio.sleep(0.02)
 
         yield {"event": "done", "data": {"completed": True}}
+
+    async def _stream_gemini_api(
+        self,
+        agent: AgentModel,
+        message: str,
+        history: list[dict[str, str]] | None,
+        token: str,
+        system_context: str | None,
+    ) -> AsyncIterator[dict[str, Any]]:
+        """Direct HTTP SSE streaming from Google Gemini REST API."""
+        model = agent.model or "gemini-2.0-flash"
+        if model.startswith("gemini-3.") or model == "default":
+            model = "gemini-2.0-flash"
+
+        url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:streamGenerateContent?alt=sse&key={token}"
+
+        contents: list[dict[str, Any]] = []
+        if history:
+            for h in history:
+                role = "user" if h.get("role") == "user" else "model"
+                content = h.get("content", "")
+                if content:
+                    contents.append({"role": role, "parts": [{"text": content}]})
+        contents.append({"role": "user", "parts": [{"text": message}]})
+
+        body: dict[str, Any] = {"contents": contents}
+        if system_context:
+            body["systemInstruction"] = {"parts": [{"text": system_context}]}
+
+        yield {"event": "thought", "data": f"Nawiązywanie bezpośredniego połączenia z Google Gemini API ({model})..."}
+
+        try:
+            async with httpx.AsyncClient(timeout=120.0) as client:
+                async with client.stream(
+                    "POST",
+                    url,
+                    headers={"Content-Type": "application/json"},
+                    json=body,
+                ) as response:
+                    if response.status_code != 200:
+                        err_body = await response.aread()
+                        try:
+                            err_json = json.loads(err_body.decode())
+                            err_msg = err_json.get("error", {}).get("message", err_body.decode())
+                        except Exception:
+                            err_msg = err_body.decode(errors="replace")
+                        yield {
+                            "event": "error",
+                            "data": {
+                                "error": f"Google Gemini API Error ({response.status_code}): {err_msg}",
+                                "code": f"HTTP_{response.status_code}",
+                            },
+                        }
+                        return
+
+                    async for line in response.aiter_lines():
+                        if not line:
+                            continue
+                        if line.startswith("data: "):
+                            data_str = line[6:].strip()
+                            try:
+                                chunk_json = json.loads(data_str)
+                                candidates = chunk_json.get("candidates", [])
+                                if candidates:
+                                    parts = candidates[0].get("content", {}).get("parts", [])
+                                    for part in parts:
+                                        if "text" in part:
+                                            yield {"event": "token", "data": part["text"]}
+                                        elif "thought" in part:
+                                            yield {"event": "thought", "data": part["thought"]}
+                            except json.JSONDecodeError:
+                                pass
+        except Exception as e:
+            yield {"event": "error", "data": {"error": f"Błąd połączenia z Google Gemini API: {str(e)}"}}

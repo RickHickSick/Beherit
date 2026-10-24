@@ -53,6 +53,28 @@ class AgentAuthManager:
         except (json.JSONDecodeError, OSError):
             return False
 
+    def get_token(self, agent_slug: str) -> str | None:
+        """Return the unmasked token / API key for direct engine execution."""
+        session_file = self.get_session_file(agent_slug)
+        if not session_file.exists():
+            return None
+        try:
+            data = json.loads(session_file.read_text(encoding="utf-8"))
+            return data.get("token") or data.get("access_token")
+        except Exception:
+            return None
+
+    def get_provider(self, agent_slug: str) -> str | None:
+        """Return the auth provider name (e.g. claude-code, antigravity, codex)."""
+        session_file = self.get_session_file(agent_slug)
+        if not session_file.exists():
+            return None
+        try:
+            data = json.loads(session_file.read_text(encoding="utf-8"))
+            return data.get("provider")
+        except Exception:
+            return None
+
     def get_auth_details(self, agent_slug: str) -> dict[str, Any]:
         """Return non-sensitive authentication status and metadata."""
         session_file = self.get_session_file(agent_slug)

@@ -1,10 +1,13 @@
 """Claude Code SDK Engine Adapter with Per-Agent Session Isolation."""
 
 import asyncio
+import json
 import shutil
 from collections.abc import AsyncIterator
 from pathlib import Path
 from typing import Any
+
+import httpx
 
 from beherit.core.auth_manager import AgentAuthManager
 from beherit.engines.base import BaseAgentEngine
@@ -157,10 +160,105 @@ class ClaudeCodeEngine(BaseAgentEngine):
                             pass
 
         else:
-            yield {"event": "thought", "data": f"Executing turn in Claude Code runtime ({agent.model})..."}
-            simulated_response = f"Echo from {agent.name} [Claude Engine]: Processed '{message}' successfully."
-            for word in simulated_response.split():
-                yield {"event": "token", "data": f"{word} "}
-                await asyncio.sleep(0.02)
+            token = self.auth_manager.get_token(agent.slug) or env.get("ANTHROPIC_API_KEY", "")
+            if token and (token.startswith("sk-ant-api") or token.startswith("sk-ant-oat")):
+                async for chunk in self._stream_anthropic_api(agent, message, history, token, full_system_context):
+                    yield chunk
+            else:
+                yield {"event": "thought", "data": f"Executing turn in Claude Code runtime ({agent.model})..."}
+                simulated_response = f"Echo from {agent.name} [Claude Engine]: Processed '{message}' successfully."
+                for word in simulated_response.split():
+                    yield {"event": "token", "data": f"{word} "}
+                    await asyncio.sleep(0.02)
 
         yield {"event": "done", "data": {"completed": True}}
+
+    async def _stream_anthropic_api(
+        self,
+        agent: AgentModel,
+        message: str,
+        history: list[dict[str, str]] | None,
+        token: str,
+        system_context: str | None,
+    ) -> AsyncIterator[dict[str, Any]]:
+        """Direct HTTP streaming from Anthropic Messages API."""
+        model = agent.model or "claude-3-5-sonnet-20241022"
+        if "sonnet" in model.lower() and not ("-" in model and any(c.isdigit() for c in model.split("-")[-1])):
+            model = "claude-3-5-sonnet-20241022"
+        elif "haiku" in model.lower() and not ("-" in model and any(c.isdigit() for c in model.split("-")[-1])):
+            model = "claude-3-5-haiku-20241022"
+
+        headers = {
+            "anthropic-version": "2023-06-01",
+            "content-type": "application/json",
+        }
+        if token.startswith("sk-ant-oat"):
+            headers["authorization"] = f"Bearer {token}"
+            headers["anthropic-beta"] = "oauth-2025-01-01"
+        else:
+            headers["x-api-key"] = token
+
+        messages = []
+        if history:
+            for h in history:
+                role = "user" if h.get("role") == "user" else "assistant"
+                content = h.get("content", "")
+                if content:
+                    messages.append({"role": role, "content": content})
+        messages.append({"role": "user", "content": message})
+
+        payload: dict[str, Any] = {
+            "model": model,
+            "max_tokens": 4096,
+            "messages": messages,
+            "stream": True,
+        }
+        if system_context:
+            payload["system"] = system_context
+
+        yield {"event": "thought", "data": f"Nawiązywanie bezpośredniego połączenia z Anthropic API ({model})..."}
+
+        try:
+            async with httpx.AsyncClient(timeout=120.0) as client:
+                async with client.stream(
+                    "POST",
+                    "https://api.anthropic.com/v1/messages",
+                    headers=headers,
+                    json=payload,
+                ) as response:
+                    if response.status_code != 200:
+                        err_body = await response.aread()
+                        try:
+                            err_json = json.loads(err_body.decode())
+                            err_msg = err_json.get("error", {}).get("message", err_body.decode())
+                        except Exception:
+                            err_msg = err_body.decode(errors="replace")
+                        yield {
+                            "event": "error",
+                            "data": {
+                                "error": f"Anthropic API Error ({response.status_code}): {err_msg}",
+                                "code": f"HTTP_{response.status_code}",
+                            },
+                        }
+                        return
+
+                    async for line in response.aiter_lines():
+                        if not line:
+                            continue
+                        if line.startswith("data: "):
+                            data_str = line[6:].strip()
+                            if data_str == "[DONE]":
+                                break
+                            try:
+                                event_data = json.loads(data_str)
+                                event_type = event_data.get("type")
+                                if event_type == "content_block_delta":
+                                    delta = event_data.get("delta", {})
+                                    if delta.get("type") == "text_delta":
+                                        yield {"event": "token", "data": delta.get("text", "")}
+                                elif event_type == "error":
+                                    yield {"event": "error", "data": {"error": event_data.get("error", {}).get("message", "API Error")}}
+                            except json.JSONDecodeError:
+                                pass
+        except Exception as e:
+            yield {"event": "error", "data": {"error": f"Błąd połączenia z Anthropic API: {str(e)}"}}
