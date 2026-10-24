@@ -2,7 +2,7 @@
 <html lang="pl" class="dark">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover, interactive-widget=resizes-content">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="Beherit">
@@ -13,7 +13,7 @@
   <script src="https://cdn.tailwindcss.com"></script>
   <script defer src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js"></script>
   
-  <!-- Marked for Markdown rendering in chat -->
+  <!-- Marked for Markdown rendering in chat & reports -->
   <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
 
   <script>
@@ -36,13 +36,23 @@
   </script>
 
   <style>
-    /* Safe area padding for mobile Safari */
+    /* Mobile iOS Safari Polish */
+    html, body {
+      height: 100%;
+      height: 100dvh;
+      overflow-x: hidden;
+      -webkit-font-smoothing: antialiased;
+      -webkit-tap-highlight-color: transparent;
+      touch-action: manipulation;
+    }
     body {
       padding-top: env(safe-area-inset-top);
       padding-bottom: env(safe-area-inset-bottom);
       padding-left: env(safe-area-inset-left);
       padding-right: env(safe-area-inset-right);
-      -webkit-font-smoothing: antialiased;
+    }
+    .safe-pb {
+      padding-bottom: max(0.75rem, env(safe-area-inset-bottom));
     }
     /* Prevent Safari auto-zoom on inputs */
     input, textarea, select {
@@ -58,12 +68,25 @@
     }
   </style>
 </head>
-<body class="bg-slate-950 text-slate-100 min-h-screen flex flex-col font-sans selection:bg-brand-500 selection:text-slate-950"
+<body class="bg-slate-950 text-slate-100 h-[100dvh] flex flex-col font-sans selection:bg-brand-500 selection:text-slate-950"
       x-data="beheritApp()"
       x-init="initApp()">
 
+  <!-- Top Notification Toast -->
+  <div x-show="toastMessage" 
+       x-transition:enter="transition ease-out duration-300"
+       x-transition:enter-start="opacity-0 -translate-y-2"
+       x-transition:enter-end="opacity-100 translate-y-0"
+       x-transition:leave="transition ease-in duration-200"
+       x-transition:leave-start="opacity-100 translate-y-0"
+       x-transition:leave-end="opacity-0 -translate-y-2"
+       class="fixed top-4 right-4 z-50 bg-slate-900 border border-emerald-500/40 text-emerald-300 px-4 py-2.5 rounded-xl shadow-2xl flex items-center gap-2 text-xs font-medium">
+    <span>💡</span>
+    <span x-text="toastMessage"></span>
+  </div>
+
   <!-- Top Navigation Bar -->
-  <header class="border-b border-slate-800 bg-slate-900/80 backdrop-blur sticky top-0 z-40 px-4 py-3 flex items-center justify-between">
+  <header class="border-b border-slate-800 bg-slate-900/80 backdrop-blur sticky top-0 z-40 px-4 py-3 flex items-center justify-between shrink-0">
     <div class="flex items-center space-x-3">
       <div class="w-9 h-9 rounded-xl bg-gradient-to-tr from-emerald-500 to-teal-400 flex items-center justify-center font-black text-slate-950 text-xl shadow-lg shadow-emerald-500/20">
         🧿
@@ -72,42 +95,47 @@
         <h1 class="font-bold text-lg leading-tight tracking-tight flex items-center gap-2">
           Beherit <span class="text-xs px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 font-mono">v0.1.0</span>
         </h1>
-        <p class="text-xs text-slate-400">Autonomiczne Środowisko Agentów AI</p>
+        <p class="text-xs text-slate-400 hidden sm:block">Autonomiczne Środowisko Agentów AI</p>
       </div>
     </div>
 
     <!-- Navigation Controls -->
-    <div class="flex items-center space-x-2">
-      <button @click="currentView = 'dashboard'" 
+    <div class="flex items-center space-x-1.5 sm:space-x-2">
+      <button @click="switchView('dashboard')" 
               :class="currentView === 'dashboard' ? 'bg-slate-800 text-emerald-400 border-slate-700' : 'text-slate-400 hover:text-slate-200'"
-              class="px-3 py-1.5 rounded-lg text-sm font-medium border border-transparent transition">
+              class="px-2.5 sm:px-3 py-1.5 rounded-lg text-xs sm:text-sm font-medium border border-transparent transition">
         Agenci
       </button>
-      <button @click="currentView = 'chat'" 
+      <button @click="switchView('chat')" 
               :class="currentView === 'chat' ? 'bg-slate-800 text-emerald-400 border-slate-700' : 'text-slate-400 hover:text-slate-200'"
-              class="px-3 py-1.5 rounded-lg text-sm font-medium border border-transparent transition">
+              class="px-2.5 sm:px-3 py-1.5 rounded-lg text-xs sm:text-sm font-medium border border-transparent transition">
         Czat
       </button>
-      <button @click="openCreateModal = true"
-              class="bg-emerald-600 hover:bg-emerald-500 text-slate-950 font-semibold px-3 py-1.5 rounded-lg text-sm shadow-md shadow-emerald-600/20 transition flex items-center gap-1.5">
+      <button @click="switchView('reports')" 
+              :class="currentView === 'reports' ? 'bg-slate-800 text-emerald-400 border-slate-700' : 'text-slate-400 hover:text-slate-200'"
+              class="px-2.5 sm:px-3 py-1.5 rounded-lg text-xs sm:text-sm font-medium border border-transparent transition">
+        Raporty
+      </button>
+      <button @click="openCreateModal = true; haptic();"
+              class="bg-emerald-600 hover:bg-emerald-500 text-slate-950 font-semibold px-2.5 sm:px-3 py-1.5 rounded-lg text-xs sm:text-sm shadow-md shadow-emerald-600/20 transition flex items-center gap-1.5">
         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
-        <span>Nowy Agent</span>
+        <span class="hidden sm:inline">Nowy Agent</span>
       </button>
     </div>
   </header>
 
   <!-- Main View Container -->
-  <main class="flex-1 flex flex-col max-w-7xl w-full mx-auto p-4">
+  <main class="flex-1 flex flex-col max-w-7xl w-full mx-auto p-3 sm:p-4 overflow-y-auto custom-scroll">
 
     <!-- VIEW 1: AGENTS DASHBOARD -->
     <section x-show="currentView === 'dashboard'" class="space-y-6">
       <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 bg-slate-900/50 p-4 rounded-2xl border border-slate-800/80">
         <div>
           <h2 class="text-xl font-bold text-slate-100">Katalog Twoich Agentów</h2>
-          <p class="text-sm text-slate-400">Każdy agent działa na własnej, odizolowanej subskrypcji SDK.</p>
+          <p class="text-sm text-slate-400">Każdy agent działa na odizolowanej subskrypcji SDK z własnym katalogiem roboczym.</p>
         </div>
         <div class="flex items-center gap-2">
-          <button @click="loadAgents()" class="text-xs text-slate-400 hover:text-slate-200 bg-slate-800 px-3 py-2 rounded-lg border border-slate-700/60 flex items-center gap-1 transition">
+          <button @click="loadAgents(); haptic();" class="text-xs text-slate-400 hover:text-slate-200 bg-slate-800 px-3 py-2 rounded-lg border border-slate-700/60 flex items-center gap-1 transition">
             <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg>
             Odśwież
           </button>
@@ -132,11 +160,11 @@
                 </div>
 
                 <!-- Auth Status Badge -->
-                <span x-show="agent.auth.status === 'authenticated'" 
+                <span x-show="agent.auth && agent.auth.status === 'authenticated'" 
                       class="px-2.5 py-0.5 rounded-full text-xs font-medium bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 flex items-center gap-1">
                   <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span> Połączono
                 </span>
-                <span x-show="agent.auth.status !== 'authenticated'" 
+                <span x-show="!agent.auth || agent.auth.status !== 'authenticated'" 
                       class="px-2.5 py-0.5 rounded-full text-xs font-medium bg-amber-500/10 text-amber-400 border border-amber-500/20 flex items-center gap-1">
                   <span class="w-1.5 h-1.5 rounded-full bg-amber-400"></span> Brak SDK
                 </span>
@@ -155,25 +183,48 @@
                 </span>
                 <span class="bg-slate-800/80 px-2 py-1 rounded-md border border-slate-700/50">
                   Terminal: 
-                  <strong :class="agent.capabilities.terminal_mode === 'unrestricted' ? 'text-amber-400' : 'text-slate-300'"
-                          x-text="agent.capabilities.terminal_mode === 'unrestricted' ? 'Swobodny' : (agent.capabilities.terminal ? 'Piaskownica' : 'Wyłączony')"></strong>
+                  <strong :class="agent.capabilities && agent.capabilities.terminal_mode === 'unrestricted' ? 'text-amber-400' : 'text-slate-300'"
+                          x-text="agent.capabilities ? (agent.capabilities.terminal_mode === 'unrestricted' ? 'Swobodny' : (agent.capabilities.terminal ? 'Piaskownica' : 'Wyłączony')) : 'Piaskownica'"></strong>
                 </span>
+                <template x-if="agent.schedule && agent.schedule.enabled">
+                  <span class="bg-slate-800/80 px-2 py-1 rounded-md border border-slate-700/50 text-emerald-400 flex items-center gap-1">
+                    ⏱️ <span x-text="agent.schedule.cron"></span>
+                  </span>
+                </template>
               </div>
             </div>
 
             <!-- Card Actions -->
-            <div class="pt-4 border-t border-slate-800/80 flex items-center justify-between gap-2">
-              <button @click="openAuthModalFor(agent)" 
-                      class="text-xs bg-slate-800 hover:bg-slate-700 text-slate-300 font-medium px-3 py-2 rounded-xl transition flex items-center gap-1.5">
-                <svg class="w-3.5 h-3.5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z"></path></svg>
-                Subskrypcja
-              </button>
+            <div class="pt-4 border-t border-slate-800/80 flex flex-col gap-2.5">
+              <div class="flex items-center justify-between gap-1.5">
+                <button @click="openAuthModalFor(agent)" 
+                        class="text-xs bg-slate-800 hover:bg-slate-700 text-slate-300 font-medium px-2.5 py-1.5 rounded-xl transition flex items-center gap-1.5">
+                  <svg class="w-3.5 h-3.5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z"></path></svg>
+                  <span>Subskrypcja</span>
+                </button>
 
-              <button @click="selectAgentForChat(agent)" 
-                      class="text-xs bg-emerald-600 hover:bg-emerald-500 text-slate-950 font-bold px-4 py-2 rounded-xl transition flex items-center gap-1.5">
-                <span>Czatuj</span>
-                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3"></path></svg>
-              </button>
+                <button @click="runAgentNow(agent)"
+                        :disabled="runningAgentSlug === agent.slug"
+                        class="text-xs bg-slate-800 hover:bg-slate-700 disabled:opacity-50 text-amber-300 font-medium px-2.5 py-1.5 rounded-xl transition flex items-center gap-1">
+                  <span x-text="runningAgentSlug === agent.slug ? '⏳ Praca...' : '⚡ Uruchom'"></span>
+                </button>
+
+                <button @click="selectAgentForChat(agent)" 
+                        class="text-xs bg-emerald-600 hover:bg-emerald-500 text-slate-950 font-bold px-3 py-1.5 rounded-xl transition flex items-center gap-1">
+                  <span>Czat</span>
+                  <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3"></path></svg>
+                </button>
+              </div>
+
+              <!-- Secondary Row: Edit & Delete -->
+              <div class="flex items-center justify-end gap-2 text-xs pt-1 border-t border-slate-800/40">
+                <button @click="openEditModalFor(agent)" class="text-slate-400 hover:text-slate-200 px-2 py-1 rounded transition flex items-center gap-1">
+                  ✏️ Edytuj
+                </button>
+                <button @click="deleteAgent(agent)" class="text-red-400 hover:text-red-300 px-2 py-1 rounded transition flex items-center gap-1">
+                  🗑️ Usuń
+                </button>
+              </div>
             </div>
           </div>
         </template>
@@ -181,9 +232,9 @@
     </section>
 
     <!-- VIEW 2: INTERACTIVE LIVE CHAT -->
-    <section x-show="currentView === 'chat'" class="flex-1 flex flex-col bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden shadow-xl">
+    <section x-show="currentView === 'chat'" class="flex-1 flex flex-col bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden shadow-xl min-h-0">
       <!-- Chat Header -->
-      <div class="px-5 py-3.5 border-b border-slate-800 bg-slate-900/90 backdrop-blur flex items-center justify-between">
+      <div class="px-5 py-3.5 border-b border-slate-800 bg-slate-900/90 backdrop-blur flex items-center justify-between shrink-0">
         <div class="flex items-center space-x-3">
           <div class="w-9 h-9 rounded-xl bg-slate-800 border border-slate-700 flex items-center justify-center text-lg">
             🤖
@@ -191,7 +242,7 @@
           <div>
             <div class="flex items-center gap-2">
               <h2 class="font-bold text-base text-slate-100" x-text="activeAgent ? activeAgent.name : 'Wybierz agenta'"></h2>
-              <span x-show="activeAgent && activeAgent.auth.status === 'authenticated'" 
+              <span x-show="activeAgent && activeAgent.auth && activeAgent.auth.status === 'authenticated'" 
                     class="w-2 h-2 rounded-full bg-emerald-400"></span>
             </div>
             <p class="text-xs text-slate-400" x-text="activeAgent ? `${activeAgent.engine} (${activeAgent.model})` : 'Brak aktywnego agenta'"></p>
@@ -208,7 +259,7 @@
       </div>
 
       <!-- Messages Window -->
-      <div class="flex-1 overflow-y-auto p-4 space-y-4 custom-scroll" id="chat-messages-container">
+      <div class="flex-1 overflow-y-auto p-4 space-y-4 custom-scroll min-h-0" id="chat-messages-container">
         <template x-if="chatMessages.length === 0">
           <div class="h-full flex flex-col items-center justify-center text-center p-6 text-slate-500">
             <div class="text-4xl mb-2">💬</div>
@@ -238,7 +289,7 @@
               </template>
 
               <!-- Main message text -->
-              <div class="text-sm leading-relaxed prose prose-invert max-w-none" 
+              <div class="text-sm leading-relaxed prose prose-invert max-w-none break-words" 
                    x-html="renderMarkdown(msg.content)"></div>
             </div>
 
@@ -255,15 +306,15 @@
       </div>
 
       <!-- Quick Prompts Bar -->
-      <div class="px-4 py-2 border-t border-slate-800/60 bg-slate-900/60 flex items-center gap-2 overflow-x-auto text-xs text-slate-300 custom-scroll">
+      <div class="px-4 py-2 border-t border-slate-800/60 bg-slate-900/60 flex items-center gap-2 overflow-x-auto text-xs text-slate-300 custom-scroll shrink-0">
         <span class="text-slate-500 text-[11px] shrink-0">Szybkie:</span>
         <button @click="quickPrompt('Przeanalizuj fixingi walut i anomalie z dzisiejszego dnia.')" class="bg-slate-800 hover:bg-slate-700 px-2.5 py-1 rounded-md shrink-0 border border-slate-700/50 transition">Audyt Walut</button>
         <button @click="quickPrompt('Wykonaj polecenie sprawdzające stan dysku i bazy danych.')" class="bg-slate-800 hover:bg-slate-700 px-2.5 py-1 rounded-md shrink-0 border border-slate-700/50 transition">Sprawdź Host</button>
         <button @click="quickPrompt('Wypisz pliki w twoim katalogu roboczym.')" class="bg-slate-800 hover:bg-slate-700 px-2.5 py-1 rounded-md shrink-0 border border-slate-700/50 transition">Lista Plików</button>
       </div>
 
-      <!-- Chat Input Area -->
-      <div class="p-3 bg-slate-950/80 border-t border-slate-800 flex items-center gap-2">
+      <!-- Chat Input Area (with iOS Safe Area Padding) -->
+      <div class="p-3 bg-slate-950/80 border-t border-slate-800 flex items-center gap-2 shrink-0 safe-pb">
         <textarea x-model="chatInput" 
                   @keydown.enter.prevent="if(!$event.shiftKey) sendChatMessage()"
                   placeholder="Napisz do agenta..." 
@@ -275,6 +326,70 @@
                 class="bg-emerald-600 hover:bg-emerald-500 disabled:opacity-40 text-slate-950 font-bold p-3 rounded-xl transition shrink-0 shadow-md shadow-emerald-600/20">
           <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"></path></svg>
         </button>
+      </div>
+    </section>
+
+    <!-- VIEW 3: REPORTS & AUDIT HISTORY -->
+    <section x-show="currentView === 'reports'" class="space-y-6">
+      <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 bg-slate-900/50 p-4 rounded-2xl border border-slate-800/80">
+        <div>
+          <h2 class="text-xl font-bold text-slate-100">Historia Zadań i Raporty</h2>
+          <p class="text-sm text-slate-400">Rejestr autonomicznych audytów i cyklicznych zadań agentów.</p>
+        </div>
+        <button @click="loadHistory(); haptic();" class="text-xs text-slate-400 hover:text-slate-200 bg-slate-800 px-3 py-2 rounded-lg border border-slate-700/60 flex items-center gap-1 transition">
+          <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg>
+          Odśwież
+        </button>
+      </div>
+
+      <!-- History Table / Cards -->
+      <div class="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden shadow-sm">
+        <template x-if="historyList.length === 0">
+          <div class="text-center py-12 text-slate-500">
+            <div class="text-4xl mb-2">📋</div>
+            <p class="text-sm font-medium">Brak historii wykonanych zadań.</p>
+            <p class="text-xs text-slate-400 mt-1">Uruchom zadanie agenta przyciskiem „⚡ Uruchom” lub poczekaj na zaplanowany harmonogram.</p>
+          </div>
+        </template>
+
+        <div x-show="historyList.length > 0" class="overflow-x-auto">
+          <table class="w-full text-left text-sm text-slate-300">
+            <thead class="bg-slate-950/60 text-xs text-slate-400 uppercase tracking-wider border-b border-slate-800">
+              <tr>
+                <th class="px-4 py-3">Agent</th>
+                <th class="px-4 py-3">Status</th>
+                <th class="px-4 py-3">Czas wykonania</th>
+                <th class="px-4 py-3">Data</th>
+                <th class="px-4 py-3">Podsumowanie</th>
+                <th class="px-4 py-3 text-right">Akcja</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-slate-800/60">
+              <template x-for="item in historyList" :key="item.id">
+                <tr class="hover:bg-slate-800/40 transition">
+                  <td class="px-4 py-3 font-semibold text-slate-100" x-text="item.agent_slug"></td>
+                  <td class="px-4 py-3">
+                    <span :class="item.status === 'success' ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' : 'bg-red-500/10 text-red-400 border-red-500/20'"
+                          class="px-2 py-0.5 rounded-full text-xs font-medium border inline-flex items-center gap-1">
+                      <span class="w-1.5 h-1.5 rounded-full" :class="item.status === 'success' ? 'bg-emerald-400' : 'bg-red-400'"></span>
+                      <span x-text="item.status === 'success' ? 'Sukces' : 'Błąd'"></span>
+                    </span>
+                  </td>
+                  <td class="px-4 py-3 font-mono text-xs" x-text="`${(item.duration_seconds || 0).toFixed(2)}s`"></td>
+                  <td class="px-4 py-3 text-xs text-slate-400" x-text="formatDate(item.created_at)"></td>
+                  <td class="px-4 py-3 text-xs text-slate-300 max-w-xs truncate" x-text="item.summary || (item.error_message ? `Błąd: ${item.error_message}` : '-')"></td>
+                  <td class="px-4 py-3 text-right">
+                    <button x-show="item.report_path" 
+                            @click="viewReport(item.report_path)"
+                            class="bg-slate-800 hover:bg-slate-700 text-emerald-400 border border-slate-700 px-2.5 py-1 rounded-lg text-xs font-medium transition inline-flex items-center gap-1">
+                      <span>📄 Raport</span>
+                    </button>
+                  </td>
+                </tr>
+              </template>
+            </tbody>
+          </table>
+        </div>
       </div>
     </section>
   </main>
@@ -315,7 +430,6 @@
           <input type="text" x-model="newAgent.model" class="w-full bg-slate-800 text-slate-100 px-3.5 py-2.5 rounded-xl border border-slate-700 outline-none font-mono text-xs">
         </div>
 
-        <!-- Terminal Mode Selection (User Decision) -->
         <div>
           <label class="block text-xs font-semibold text-slate-300 mb-1">Poziom Uprawnień Terminala (Bash)</label>
           <select x-model="newAgent.terminal_mode" class="w-full bg-slate-800 text-slate-100 px-3.5 py-2.5 rounded-xl border border-slate-700 outline-none">
@@ -339,6 +453,114 @@
       <div class="pt-3 border-t border-slate-800 flex justify-end gap-2">
         <button @click="openCreateModal = false" class="px-4 py-2 rounded-xl text-slate-400 hover:text-slate-200 text-xs">Anuluj</button>
         <button @click="submitCreateAgent()" class="bg-emerald-600 hover:bg-emerald-500 text-slate-950 font-bold px-5 py-2 rounded-xl text-xs transition">Utwórz Agenta</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: EDYCJA AGENTA -->
+  <div x-show="openEditModal" class="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4" style="display: none;">
+    <div @click.away="openEditModal = false" class="bg-slate-900 border border-slate-800 w-full max-w-xl rounded-2xl p-6 shadow-2xl space-y-4 max-h-[90vh] overflow-y-auto custom-scroll">
+      <div class="flex items-center justify-between border-b border-slate-800 pb-3">
+        <h3 class="text-lg font-bold text-slate-100 flex items-center gap-2">
+          <span>✏️</span> Edycja Agenta: <span class="text-emerald-400" x-text="editAgent.slug"></span>
+        </h3>
+        <button @click="openEditModal = false" class="text-slate-400 hover:text-slate-200">✕</button>
+      </div>
+
+      <div class="space-y-4 text-sm">
+        <div>
+          <label class="block text-xs font-semibold text-slate-300 mb-1">Nazwa Agenta</label>
+          <input type="text" x-model="editAgent.name" class="w-full bg-slate-800 text-slate-100 px-3.5 py-2.5 rounded-xl border border-slate-700 outline-none focus:border-emerald-500">
+        </div>
+
+        <div>
+          <label class="block text-xs font-semibold text-slate-300 mb-1">Opis Agenta</label>
+          <input type="text" x-model="editAgent.description" class="w-full bg-slate-800 text-slate-100 px-3.5 py-2.5 rounded-xl border border-slate-700 outline-none focus:border-emerald-500">
+        </div>
+
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block text-xs font-semibold text-slate-300 mb-1">Silnik SDK</label>
+            <select x-model="editAgent.engine" class="w-full bg-slate-800 text-slate-100 px-3.5 py-2.5 rounded-xl border border-slate-700 outline-none">
+              <option value="antigravity">Google Antigravity SDK</option>
+              <option value="claude-code">Claude Code SDK</option>
+              <option value="codex">OpenAI Codex</option>
+            </select>
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-slate-300 mb-1">Model Silnika</label>
+            <input type="text" x-model="editAgent.model" class="w-full bg-slate-800 text-slate-100 px-3.5 py-2.5 rounded-xl border border-slate-700 outline-none font-mono text-xs">
+          </div>
+        </div>
+
+        <!-- Terminal Mode -->
+        <div>
+          <label class="block text-xs font-semibold text-slate-300 mb-1">Poziom Uprawnień Terminala (Bash)</label>
+          <select x-model="editAgent.terminal_mode" class="w-full bg-slate-800 text-slate-100 px-3.5 py-2.5 rounded-xl border border-slate-700 outline-none">
+            <option value="restricted">Piaskownica (Tylko katalog roboczy agenta)</option>
+            <option value="unrestricted">Pełna swoboda (Brak ograniczeń ścieżek na hoście)</option>
+            <option value="disabled">Wyłączony (Brak dostępu do terminala)</option>
+          </select>
+        </div>
+
+        <!-- Schedule / Cron -->
+        <div class="p-3 bg-slate-950/70 rounded-xl border border-slate-800 space-y-2">
+          <div class="flex items-center justify-between">
+            <label class="text-xs font-semibold text-slate-300">Autonomiczny Harmonogram (Cron)</label>
+            <label class="relative inline-flex items-center cursor-pointer">
+              <input type="checkbox" x-model="editAgent.schedule_enabled" class="sr-only peer">
+              <div class="w-9 h-5 bg-slate-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-emerald-600"></div>
+            </label>
+          </div>
+          <div x-show="editAgent.schedule_enabled" class="space-y-2 pt-2 border-t border-slate-800/80">
+            <div>
+              <label class="block text-[11px] text-slate-400 mb-0.5">Wyrażenie Cron (np. 0 8 * * *)</label>
+              <input type="text" x-model="editAgent.schedule_cron" placeholder="0 8 * * *" class="w-full bg-slate-800 text-slate-100 px-3 py-2 rounded-lg border border-slate-700 outline-none font-mono text-xs">
+            </div>
+            <div>
+              <label class="block text-[11px] text-slate-400 mb-0.5">Cykliczny Prompt do wykonania</label>
+              <textarea x-model="editAgent.schedule_prompt" rows="2" placeholder="Polecenie uruchamiane zgodnie z harmonogramem..." class="w-full bg-slate-800 text-slate-100 px-3 py-2 rounded-lg border border-slate-700 outline-none text-xs"></textarea>
+            </div>
+          </div>
+        </div>
+
+        <div>
+          <label class="block text-xs font-semibold text-slate-300 mb-1">Master Prompt (Główna Rola Agenta)</label>
+          <textarea x-model="editAgent.master_prompt" rows="3" class="w-full bg-slate-800 text-slate-100 px-3.5 py-2.5 rounded-xl border border-slate-700 outline-none text-xs focus:border-emerald-500"></textarea>
+        </div>
+
+        <div>
+          <label class="block text-xs font-semibold text-slate-300 mb-1">Wytyczne operacyjne (instructions.md)</label>
+          <textarea x-model="editAgent.instructions" rows="2" class="w-full bg-slate-800 text-slate-100 px-3.5 py-2.5 rounded-xl border border-slate-700 outline-none text-xs focus:border-emerald-500"></textarea>
+        </div>
+      </div>
+
+      <div class="pt-3 border-t border-slate-800 flex justify-end gap-2">
+        <button @click="openEditModal = false" class="px-4 py-2 rounded-xl text-slate-400 hover:text-slate-200 text-xs">Anuluj</button>
+        <button @click="submitUpdateAgent()" class="bg-emerald-600 hover:bg-emerald-500 text-slate-950 font-bold px-5 py-2 rounded-xl text-xs transition">Zapisz Zmiany</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: PODGLĄD RAPORTU -->
+  <div x-show="openReportModal" class="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4" style="display: none;">
+    <div @click.away="openReportModal = false" class="bg-slate-900 border border-slate-800 w-full max-w-3xl rounded-2xl p-6 shadow-2xl space-y-4 max-h-[90vh] flex flex-col">
+      <div class="flex items-center justify-between border-b border-slate-800 pb-3">
+        <div>
+          <h3 class="text-base font-bold text-slate-100 flex items-center gap-2">
+            <span>📑</span> Raport Autonomiczny: <span class="text-emerald-400" x-text="currentReportFilename"></span>
+          </h3>
+          <p class="text-xs text-slate-400 font-mono truncate max-w-lg" x-text="currentReportPath"></p>
+        </div>
+        <button @click="openReportModal = false" class="text-slate-400 hover:text-slate-200">✕</button>
+      </div>
+
+      <div class="flex-1 overflow-y-auto p-4 bg-slate-950/60 border border-slate-800 rounded-xl custom-scroll prose prose-invert max-w-none text-sm break-words"
+           x-html="renderMarkdown(currentReportContent)">
+      </div>
+
+      <div class="pt-2 border-t border-slate-800 flex justify-end">
+        <button @click="openReportModal = false" class="bg-slate-800 hover:bg-slate-700 text-slate-200 px-4 py-2 rounded-xl text-xs font-semibold">Zamknij</button>
       </div>
     </div>
   </div>
@@ -372,12 +594,12 @@
 
       <!-- Auth Method Selector Tabs -->
       <div class="flex border-b border-slate-800 text-xs">
-        <button @click="authTab = 'auto'" 
+        <button @click="authTab = 'auto'; haptic();" 
                 :class="authTab === 'auto' ? 'border-b-2 border-emerald-500 text-emerald-400 font-bold' : 'text-slate-400 hover:text-slate-200'"
                 class="pb-2 px-3 transition">
           Automatyczne Logowanie (OAuth)
         </button>
-        <button @click="authTab = 'manual'" 
+        <button @click="authTab = 'manual'; haptic();" 
                 :class="authTab === 'manual' ? 'border-b-2 border-emerald-500 text-emerald-400 font-bold' : 'text-slate-400 hover:text-slate-200'"
                 class="pb-2 px-3 transition">
           Ręczne Wklejenie Tokena
@@ -441,6 +663,15 @@
         agents: [],
         activeAgent: null,
         selectedAgentSlug: '',
+        toastMessage: '',
+        runningAgentSlug: null,
+
+        // Reports & History
+        historyList: [],
+        openReportModal: false,
+        currentReportFilename: '',
+        currentReportPath: '',
+        currentReportContent: '',
         
         // Chat
         chatMessages: [],
@@ -459,6 +690,22 @@
           instructions: 'Zawsze odpowiadaj zwięźle i precyzyjnie.'
         },
 
+        // Edit Modal
+        openEditModal: false,
+        editAgent: {
+          slug: '',
+          name: '',
+          description: '',
+          engine: 'antigravity',
+          model: '',
+          terminal_mode: 'restricted',
+          schedule_enabled: false,
+          schedule_cron: '0 8 * * *',
+          schedule_prompt: '',
+          master_prompt: '',
+          instructions: ''
+        },
+
         // Auth Modal
         openAuthModal: false,
         authTargetAgent: null,
@@ -468,10 +715,31 @@
         authCodeInput: '',
         manualTokenInput: '',
 
+        haptic() {
+          if (window.navigator && window.navigator.vibrate) {
+            try { window.navigator.vibrate(15); } catch (_) {}
+          }
+        },
+
+        showToast(msg) {
+          this.toastMessage = msg;
+          setTimeout(() => {
+            if (this.toastMessage === msg) this.toastMessage = '';
+          }, 4000);
+        },
+
         async initApp() {
           await this.loadAgents();
           if (this.agents.length > 0) {
             this.selectAgentForChat(this.agents[0]);
+          }
+        },
+
+        async switchView(view) {
+          this.haptic();
+          this.currentView = view;
+          if (view === 'reports') {
+            await this.loadHistory();
           }
         },
 
@@ -485,11 +753,32 @@
           }
         },
 
+        async loadHistory() {
+          try {
+            const res = await fetch('/api/history');
+            const data = await res.json();
+            this.historyList = data.history || [];
+          } catch (e) {
+            console.error('Błąd ładowania historii:', e);
+          }
+        },
+
+        formatDate(dateStr) {
+          if (!dateStr) return '-';
+          try {
+            const d = new Date(dateStr);
+            return d.toLocaleString('pl-PL', { dateStyle: 'short', timeStyle: 'short' });
+          } catch {
+            return dateStr;
+          }
+        },
+
         generateSlug(name) {
           return name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
         },
 
         selectAgentForChat(agent) {
+          this.haptic();
           this.activeAgent = agent;
           this.selectedAgentSlug = agent.slug;
           this.currentView = 'chat';
@@ -510,6 +799,7 @@
 
         async sendChatMessage() {
           if (!this.chatInput.trim() || !this.activeAgent || this.isStreaming) return;
+          this.haptic();
           const userMsg = this.chatInput.trim();
           this.chatInput = '';
           this.chatMessages.push({ role: 'user', content: userMsg });
@@ -611,6 +901,7 @@
         },
 
         async submitCreateAgent() {
+          this.haptic();
           try {
             const res = await fetch('/api/agents', {
               method: 'POST',
@@ -620,6 +911,7 @@
 
             if (res.ok) {
               this.openCreateModal = false;
+              this.showToast(`Utworzono agenta ${this.newAgent.name}`);
               await this.loadAgents();
               const created = this.agents.find(a => a.slug === this.newAgent.slug);
               if (created) this.selectAgentForChat(created);
@@ -632,7 +924,139 @@
           }
         },
 
+        openEditModalFor(agent) {
+          this.haptic();
+          this.editAgent = {
+            slug: agent.slug,
+            name: agent.name || '',
+            description: agent.description || '',
+            engine: agent.engine || 'antigravity',
+            model: agent.model || '',
+            terminal_mode: (agent.capabilities && agent.capabilities.terminal_mode) || 'restricted',
+            schedule_enabled: !!(agent.schedule && agent.schedule.enabled),
+            schedule_cron: (agent.schedule && agent.schedule.cron) || '0 8 * * *',
+            schedule_prompt: (agent.schedule && agent.schedule.prompt) || '',
+            master_prompt: agent.master_prompt || '',
+            instructions: agent.instructions || ''
+          };
+          this.openEditModal = true;
+        },
+
+        async submitUpdateAgent() {
+          this.haptic();
+          try {
+            const payload = {
+              name: this.editAgent.name,
+              description: this.editAgent.description,
+              engine: this.editAgent.engine,
+              model: this.editAgent.model,
+              master_prompt: this.editAgent.master_prompt,
+              instructions: this.editAgent.instructions,
+              capabilities: {
+                terminal: this.editAgent.terminal_mode !== 'disabled',
+                terminal_mode: this.editAgent.terminal_mode,
+                file_system: true,
+                web_search: true
+              },
+              schedule: {
+                enabled: this.editAgent.schedule_enabled,
+                cron: this.editAgent.schedule_cron,
+                prompt: this.editAgent.schedule_prompt
+              }
+            };
+
+            const res = await fetch(`/api/agents/${this.editAgent.slug}`, {
+              method: 'PUT',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(payload)
+            });
+
+            if (res.ok) {
+              this.openEditModal = false;
+              this.showToast(`Zaktualizowano agenta ${this.editAgent.slug}`);
+              await this.loadAgents();
+            } else {
+              const err = await res.json();
+              alert(`Błąd aktualizacji: ${err.detail || 'Nieznany błąd'}`);
+            }
+          } catch (e) {
+            alert(`Błąd sieci: ${e.message}`);
+          }
+        },
+
+        async deleteAgent(agent) {
+          this.haptic();
+          if (!confirm(`Czy na pewno chcesz bezpowrotnie usunąć agenta "${agent.name}" (${agent.slug})?`)) {
+            return;
+          }
+
+          try {
+            const res = await fetch(`/api/agents/${agent.slug}`, {
+              method: 'DELETE'
+            });
+
+            if (res.ok) {
+              this.showToast(`Usunięto agenta ${agent.name}`);
+              await this.loadAgents();
+              if (this.activeAgent && this.activeAgent.slug === agent.slug) {
+                this.activeAgent = this.agents[0] || null;
+                this.selectedAgentSlug = this.activeAgent ? this.activeAgent.slug : '';
+              }
+            } else {
+              const err = await res.json();
+              alert(`Błąd usuwania: ${err.detail || 'Nieznany błąd'}`);
+            }
+          } catch (e) {
+            alert(`Błąd sieci: ${e.message}`);
+          }
+        },
+
+        async runAgentNow(agent) {
+          this.haptic();
+          this.runningAgentSlug = agent.slug;
+          this.showToast(`Uruchamianie zadania agenta ${agent.name}...`);
+
+          try {
+            const res = await fetch(`/api/agents/${agent.slug}/run-now`, {
+              method: 'POST'
+            });
+
+            if (res.ok) {
+              const data = await res.json();
+              this.showToast(`Zadanie zakończone! (${data.duration ? data.duration.toFixed(1) + 's' : 'Sukces'})`);
+              await this.loadHistory();
+            } else {
+              const err = await res.json();
+              alert(`Błąd uruchomienia: ${err.detail || 'Nieznany błąd'}`);
+            }
+          } catch (e) {
+            alert(`Błąd sieci: ${e.message}`);
+          } finally {
+            this.runningAgentSlug = null;
+          }
+        },
+
+        async viewReport(reportPath) {
+          this.haptic();
+          try {
+            const res = await fetch(`/api/reports/view?path=${encodeURIComponent(reportPath)}`);
+            if (res.ok) {
+              const data = await res.json();
+              this.currentReportFilename = data.filename;
+              this.currentReportPath = data.path;
+              this.currentReportContent = data.content;
+              this.openReportModal = true;
+            } else {
+              const err = await res.json();
+              alert(`Nie udało się otworzyć raportu: ${err.detail || 'Błąd'}`);
+            }
+          } catch (e) {
+            alert(`Błąd pobierania raportu: ${e.message}`);
+          }
+        },
+
         async openAuthModalFor(agent) {
+          this.haptic();
           this.authTargetAgent = agent;
           this.activeOAuthFlow = null;
           this.manualTokenInput = '';

@@ -13,10 +13,11 @@ from beherit.core.repository import AgentRepository
 from beherit.core.scheduler import AgentScheduler
 from beherit.core.tools import CapabilitiesGuard
 from beherit.engines import EngineRegistry
-from beherit.models.agent import AgentModel, EngineType
+from beherit.models.agent import AgentModel, EngineType, AgentCapabilities, AgentSchedule
 
 router = APIRouter(prefix="/api/agents", tags=["agents"])
 history_router = APIRouter(prefix="/api/history", tags=["history"])
+reports_router = APIRouter(prefix="/api/reports", tags=["reports"])
 
 repo = AgentRepository()
 auth_mgr = AgentAuthManager()
@@ -34,6 +35,8 @@ class CreateAgentRequest(BaseModel):
     model: str = Field(default="gemini-3.8-flash")
     master_prompt: str = Field(default="You are an autonomous AI assistant.")
     instructions: Optional[str] = Field(default="")
+    capabilities: Optional[AgentCapabilities] = None
+    schedule: Optional[AgentSchedule] = None
     custom_target_dir: Optional[str] = Field(
         default=None,
         description="Optional custom path (e.g. specific Obsidian folder) to save this agent",
@@ -43,9 +46,12 @@ class CreateAgentRequest(BaseModel):
 class UpdateAgentRequest(BaseModel):
     name: Optional[str] = None
     description: Optional[str] = None
+    engine: Optional[EngineType] = None
     model: Optional[str] = None
     master_prompt: Optional[str] = None
     instructions: Optional[str] = None
+    capabilities: Optional[AgentCapabilities] = None
+    schedule: Optional[AgentSchedule] = None
 
 
 class ManualTokenRequest(BaseModel):
@@ -104,10 +110,13 @@ async def create_agent(payload: CreateAgentRequest):
         model=payload.model,
         master_prompt=payload.master_prompt,
         instructions=payload.instructions,
+        capabilities=payload.capabilities or AgentCapabilities(),
+        schedule=payload.schedule or AgentSchedule(),
     )
 
     target_dir = Path(payload.custom_target_dir) if payload.custom_target_dir else None
     saved_path = repo.save_agent(agent_model, target_dir=target_dir)
+    scheduler.sync_all_jobs()
 
     return {
         "status": "created",
@@ -137,14 +146,21 @@ async def update_agent(slug: str, payload: UpdateAgentRequest):
         agent.name = payload.name
     if payload.description is not None:
         agent.description = payload.description
+    if payload.engine is not None:
+        agent.engine = payload.engine
     if payload.model is not None:
         agent.model = payload.model
     if payload.master_prompt is not None:
         agent.master_prompt = payload.master_prompt
     if payload.instructions is not None:
         agent.instructions = payload.instructions
+    if payload.capabilities is not None:
+        agent.capabilities = payload.capabilities
+    if payload.schedule is not None:
+        agent.schedule = payload.schedule
 
     repo.save_agent(agent)
+    scheduler.sync_all_jobs()
     return repo.load_agent(slug).model_dump(mode="json")
 
 
@@ -258,6 +274,36 @@ async def trigger_agent_job_now(slug: str):
 async def get_recent_jobs_history(limit: int = 50):
     """Retrieve global recent job execution history."""
     return {"history": db_mgr.get_recent_history(limit=limit)}
+
+
+# --- Markdown Report Viewer Endpoint ---
+
+
+@reports_router.get("/view")
+async def view_report(path: str):
+    """Safely read and return a markdown report file."""
+    report_file = Path(path).resolve()
+    if not report_file.is_file():
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Report file not found.")
+    if not (report_file.name.endswith(".md") or report_file.name.endswith(".txt")):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Only markdown or text reports can be viewed.",
+        )
+    forbidden_prefixes = ["/etc", "/proc", "/sys", "/dev", "/root", "/var/run"]
+    resolved_str = str(report_file)
+    if any(resolved_str.startswith(p) for p in forbidden_prefixes):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied.")
+
+    try:
+        content = report_file.read_text(encoding="utf-8")
+        return {
+            "path": resolved_str,
+            "filename": report_file.name,
+            "content": content,
+        }
+    except Exception as e:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
 
 
 # --- Chat Sessions & Persistence Endpoints ---

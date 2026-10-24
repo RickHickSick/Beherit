@@ -8,7 +8,7 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
 from beherit import __version__
-from beherit.api.routes import router as agents_router, history_router, scheduler
+from beherit.api.routes import router as agents_router, history_router, reports_router, scheduler
 from beherit.config import settings
 
 
@@ -38,6 +38,7 @@ app.add_middleware(
 
 app.include_router(agents_router)
 app.include_router(history_router)
+app.include_router(reports_router)
 
 # Static files directory
 STATIC_DIR = Path(__file__).parent / "static"

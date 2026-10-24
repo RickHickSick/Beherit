@@ -139,3 +139,86 @@ def test_execute_tool_api(tmp_path: Path, monkeypatch):
     assert tool_resp.status_code == 200
     assert tool_resp.json()["status"] == "success"
     assert "items" in tool_resp.json()["result"]
+
+
+def test_update_and_delete_agent(tmp_path: Path, monkeypatch):
+    """Verify BEH-019: Agent update and deletion endpoints."""
+    monkeypatch.setattr(repo, "base_dir", tmp_path)
+    monkeypatch.setattr(auth_mgr, "base_dir", tmp_path)
+
+    # 1. Create agent
+    client.post(
+        "/api/agents",
+        json={
+            "name": "Old Name",
+            "slug": "update-test",
+            "engine": "antigravity",
+            "model": "gemini-3.8-flash",
+            "master_prompt": "Initial prompt",
+        },
+    )
+
+    # 2. Update agent
+    update_resp = client.put(
+        "/api/agents/update-test",
+        json={
+            "name": "New Name",
+            "description": "Updated description",
+            "engine": "codex",
+            "model": "gpt-4o",
+            "capabilities": {
+                "terminal": True,
+                "terminal_mode": "unrestricted",
+            },
+            "schedule": {
+                "enabled": True,
+                "cron": "0 12 * * *",
+                "prompt": "Run daily report",
+            },
+        },
+    )
+    assert update_resp.status_code == 200
+    data = update_resp.json()
+    assert data["name"] == "New Name"
+    assert data["engine"] == "codex"
+    assert data["model"] == "gpt-4o"
+    assert data["capabilities"]["terminal_mode"] == "unrestricted"
+    assert data["schedule"]["enabled"] is True
+    assert data["schedule"]["cron"] == "0 12 * * *"
+
+    # 3. Delete agent
+    del_resp = client.delete("/api/agents/update-test")
+    assert del_resp.status_code == 200
+    assert del_resp.json()["status"] == "deleted"
+
+    # 4. Verify 404 after deletion
+    get_resp = client.get("/api/agents/update-test")
+    assert get_resp.status_code == 404
+
+
+def test_reports_view_api(tmp_path: Path):
+    """Verify BEH-020: Secure markdown report viewer endpoint."""
+    report_file = tmp_path / "sample_report.md"
+    report_file.write_text("# Test Report\n\nAll tasks completed successfully.", encoding="utf-8")
+
+    # 1. View valid report
+    resp = client.get(f"/api/reports/view?path={report_file}")
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["filename"] == "sample_report.md"
+    assert "# Test Report" in data["content"]
+
+    # 2. View non-existent file
+    resp404 = client.get(f"/api/reports/view?path={tmp_path / 'ghost.md'}")
+    assert resp404.status_code == 404
+
+    # 3. View invalid extension
+    txt_file = tmp_path / "something.py"
+    txt_file.write_text("print('hello')", encoding="utf-8")
+    resp_bad = client.get(f"/api/reports/view?path={txt_file}")
+    assert resp_bad.status_code == 400
+
+    # 4. Security check on forbidden path prefix
+    resp_sec = client.get("/api/reports/view?path=/etc/shadow.md")
+    assert resp_sec.status_code in (403, 404)
+
