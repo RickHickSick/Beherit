@@ -18,7 +18,12 @@ class AgentRepository:
 
     def __init__(self, base_dir: Path | None = None):
         self.base_dir = (base_dir or settings.agents_dir).resolve()
-        self.auth_manager = AgentAuthManager(self.base_dir)
+        self._auth_manager = AgentAuthManager(self.base_dir)
+
+    @property
+    def auth_manager(self) -> AgentAuthManager:
+        self._auth_manager.base_dir = self.base_dir
+        return self._auth_manager
 
     def list_agents(self) -> list[AgentModel]:
         """Discover and load all valid or degraded agents found in the storage directory."""

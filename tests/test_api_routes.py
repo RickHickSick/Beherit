@@ -255,3 +255,97 @@ def test_logo_and_brand_assets_endpoints():
     assert "/static/icon.png" in index_resp.text
 
 
+def test_create_agent_with_initial_key(tmp_path: Path, monkeypatch):
+    """Verify creating an agent with initial API or SDK key automatically connects it."""
+    monkeypatch.setattr(repo, "base_dir", tmp_path)
+    monkeypatch.setattr(auth_mgr, "base_dir", tmp_path)
+
+    # 1. Create agent with direct API key
+    res_api = client.post(
+        "/api/agents",
+        json={
+            "name": "Market Analyst",
+            "slug": "market-analyst",
+            "engine": "antigravity",
+            "model": "gemini-3.8-flash",
+            "master_prompt": "Analyze stocks.",
+            "auth_type": "api",
+            "auth_token": "AIzaSyTestApiKey1234567890abcdef",
+        },
+    )
+    assert res_api.status_code == 201
+    agent_data = res_api.json()["agent"]
+    assert agent_data["auth"]["status"] == "authenticated"
+
+    status_resp = client.get("/api/agents/market-analyst/auth/status")
+    assert status_resp.status_code == 200
+    details = status_resp.json()
+    assert details["authenticated"] is True
+    assert details["auth_type"] == "api"
+    assert "AIzaSy" in details["masked_token"]
+
+    # 2. Create agent with SDK token
+    res_sdk = client.post(
+        "/api/agents",
+        json={
+            "name": "Claude Agent",
+            "slug": "claude-agent",
+            "engine": "claude-code",
+            "model": "claude-3-7-sonnet-20250219",
+            "master_prompt": "Code helper.",
+            "auth_type": "sdk",
+            "auth_token": "sk-ant-sid01-test-sdk-session-token-9999",
+        },
+    )
+    assert res_sdk.status_code == 201
+    sdk_agent_data = res_sdk.json()["agent"]
+    assert sdk_agent_data["auth"]["status"] == "authenticated"
+
+    sdk_status = client.get("/api/agents/claude-agent/auth/status").json()
+    assert sdk_status["authenticated"] is True
+    assert sdk_status["auth_type"] == "sdk"
+
+
+def test_global_local_detect_endpoint():
+    """Verify global local CLI credentials detection without requiring agent slug."""
+    resp = client.get("/api/agents/auth/local-detect")
+    assert resp.status_code == 200
+    data = resp.json()
+    assert "antigravity" in data
+    assert "claude_code" in data
+    assert "claude-code" in data
+    assert "codex" in data
+
+
+def test_create_agent_with_import_local_auth(tmp_path: Path, monkeypatch):
+    """Verify creating an agent with import_local_auth automatically attempts server import."""
+    monkeypatch.setattr(repo, "base_dir", tmp_path)
+    monkeypatch.setattr(auth_mgr, "base_dir", tmp_path)
+
+    # Mock import_local_cli_session
+    called = {}
+
+    def mock_import(agent_slug, provider):
+        called["slug"] = agent_slug
+        called["provider"] = provider
+        auth_mgr.save_manual_token(agent_slug, "imported_host_token", provider=provider)
+
+    monkeypatch.setattr(auth_mgr, "import_local_cli_session", mock_import)
+
+    res = client.post(
+        "/api/agents",
+        json={
+            "name": "Auto Host Agent",
+            "slug": "auto-host-agent",
+            "engine": "antigravity",
+            "import_local_auth": True,
+        },
+    )
+    assert res.status_code == 201
+    assert called.get("slug") == "auto-host-agent"
+    status_resp = client.get("/api/agents/auto-host-agent/auth/status").json()
+    assert status_resp["authenticated"] is True
+
+
+
+

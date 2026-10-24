@@ -54,6 +54,9 @@ class CreateAgentRequest(BaseModel):
         default=None,
         description="Optional custom path (e.g. specific Obsidian folder) to save this agent",
     )
+    auth_type: str | None = Field(default="api", description="Key type: 'api' or 'sdk'")
+    auth_token: str | None = Field(default=None, description="Initial API key or SDK session token")
+    import_local_auth: bool = Field(default=False, description="Automatically import local host CLI session")
 
 
 class UpdateAgentRequest(BaseModel):
@@ -85,6 +88,7 @@ class VerifyTokenRequest(BaseModel):
 class ManualTokenRequest(BaseModel):
     token: str = Field(..., min_length=1)
     provider: EngineType = Field(default=EngineType.ANTIGRAVITY)
+    auth_type: str | None = Field(default="api", description="Key type: 'api' or 'sdk'")
 
 
 class OAuthStartRequest(BaseModel):
@@ -153,6 +157,21 @@ async def create_agent(payload: CreateAgentRequest):
 
     target_dir = Path(payload.custom_target_dir) if payload.custom_target_dir else None
     saved_path = repo.save_agent(agent_model, target_dir=target_dir)
+
+    # Automatically connect agent via SDK token, API key, or host session import
+    if payload.import_local_auth:
+        try:
+            auth_mgr.import_local_cli_session(agent_model.slug, provider=agent_model.engine)
+        except Exception:
+            pass
+    elif payload.auth_token and payload.auth_token.strip():
+        auth_mgr.save_manual_token(
+            agent_slug=agent_model.slug,
+            token=payload.auth_token.strip(),
+            provider=agent_model.engine,
+            extra_metadata={"auth_type": payload.auth_type or "api"},
+        )
+
     scheduler.sync_all_jobs()
 
     return {
@@ -241,6 +260,7 @@ async def save_manual_token(slug: str, payload: ManualTokenRequest):
             agent_slug=slug,
             token=payload.token,
             provider=payload.provider,
+            extra_metadata={"auth_type": payload.auth_type or "api"},
         )
         return {"status": "success", "auth": details}
     except ValueError as e:
@@ -311,6 +331,12 @@ async def disconnect_agent_auth(slug: str):
 
     auth_mgr.clear_session(slug)
     return {"status": "disconnected", "auth": auth_mgr.get_auth_details(slug)}
+
+
+@router.get("/auth/local-detect")
+async def detect_local_auth_global():
+    """Detect available local CLI sessions on server without requiring agent slug."""
+    return auth_mgr.detect_local_cli_credentials()
 
 
 @router.get("/{slug}/auth/local-detect")

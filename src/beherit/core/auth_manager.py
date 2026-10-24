@@ -98,6 +98,7 @@ class AgentAuthManager:
                 "authenticated": is_valid,
                 "provider": data.get("provider"),
                 "auth_method": data.get("auth_method", "manual"),
+                "auth_type": data.get("auth_type", "api"),
                 "masked_token": masked,
                 "expires_at": data.get("expires_at"),
                 "profile_id": data.get("profile_id", f"{agent_slug}-profile"),
@@ -175,13 +176,15 @@ class AgentAuthManager:
         elif os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY"):
             antigravity_found = True
 
+        claude_info = {
+            "available": claude_found,
+            "tier": claude_tier,
+            "path": str(claude_creds) if claude_found else None,
+            "description": f"Wykryto subskrypcję Claude ({claude_tier or 'CLI'}) na serwerze" if claude_found else "Brak poświadczeń ~/.claude",
+        }
         return {
-            "claude_code": {
-                "available": claude_found,
-                "tier": claude_tier,
-                "path": str(claude_creds) if claude_found else None,
-                "description": f"Wykryto subskrypcję Claude ({claude_tier or 'CLI'}) na serwerze" if claude_found else "Brak poświadczeń ~/.claude",
-            },
+            "claude_code": claude_info,
+            "claude-code": claude_info,
             "antigravity": {
                 "available": antigravity_found,
                 "description": "Wykryto aktywną sesję Google Antigravity / Gemini na serwerze" if antigravity_found else "Brak poświadczeń ~/.gemini",
@@ -318,7 +321,7 @@ class AgentAuthManager:
                 if not is_standard:
                     return {
                         "valid": False,
-                        "error": "Format tokena Gemini/Antigravity wydaje się nieprawidłowy (oczekiwano klucza AIza... lub tokena OAuth ya29...).",
+                        "error": "Format klucza/tokena Gemini/Antigravity wydaje się nieprawidłowy (oczekiwano klucza API AIza... lub tokena sesji SDK).",
                     }
                 msg = "Poświadczenia Google Antigravity / Gemini są prawidłowo sformatowane i aktywne."
 

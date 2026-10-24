@@ -18,7 +18,7 @@
 ## 🌟 Key Features
 
 * 🔑 **Per-Agent Subscription Isolation (Multi-Tenant Auth):**
-  Create unlimited agents, each independently authenticated against its own subscription profile (`.auth/`). Supports full RFC 8628 Device Authorization Grant (OAuth 2.0) with automated polling and token refresh, or direct token paste.
+  Create unlimited agents, each independently authenticated against its own profile (`.auth/`). Connect easily via CLI SDK session tokens or direct API keys (Google Gemini, Anthropic Claude, OpenAI) with 1-click server import.
 * 🧩 **Model Context Protocol (MCP) Built-in Server:**
   Exposes the agent's workspace and sandboxed tools (`execute_bash`, `read_file`, `write_file`, `list_dir`) as a native MCP server (`beherit mcp --agent-slug <slug>`), auto-injected into each agent's `mcp.json`.
 * 📚 **Local Semantic RAG (Knowledge Base):**

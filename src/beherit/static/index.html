@@ -142,7 +142,7 @@
               class="px-2.5 sm:px-3 py-1.5 rounded-lg text-xs sm:text-sm font-medium border border-transparent transition">
         Raporty
       </button>
-      <button @click="openCreateModal = true; haptic();"
+      <button @click="openCreateModalDialog()"
               class="bg-emerald-600 hover:bg-emerald-500 text-slate-950 font-semibold px-2.5 sm:px-3 py-1.5 rounded-lg text-xs sm:text-sm shadow-md shadow-emerald-600/20 transition flex items-center gap-1.5">
         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
         <span class="hidden sm:inline">Nowy Agent</span>
@@ -192,7 +192,7 @@
                 </span>
                 <span x-show="!agent.auth || agent.auth.status !== 'authenticated'" 
                       class="px-2.5 py-0.5 rounded-full text-xs font-medium bg-amber-500/10 text-amber-400 border border-amber-500/20 flex items-center gap-1">
-                  <span class="w-1.5 h-1.5 rounded-full bg-amber-400"></span> Brak SDK
+                  <span class="w-1.5 h-1.5 rounded-full bg-amber-400"></span> Brak klucza
                 </span>
               </div>
 
@@ -231,7 +231,7 @@
                 <button @click="openAuthModalFor(agent)" 
                         class="text-xs bg-slate-800 hover:bg-slate-700 text-slate-300 font-medium px-2.5 py-1.5 rounded-xl transition flex items-center gap-1.5">
                   <svg class="w-3.5 h-3.5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z"></path></svg>
-                  <span>Subskrypcja</span>
+                  <span>Klucz / Połączenie</span>
                 </button>
 
                 <button @click="runAgentNow(agent)"
@@ -475,7 +475,7 @@
           </div>
           <div>
             <label class="block text-xs font-semibold text-slate-300 mb-1">Silnik SDK</label>
-            <select x-model="newAgent.engine" class="w-full bg-slate-800 text-slate-100 px-3.5 py-2.5 rounded-xl border border-slate-700 outline-none">
+            <select x-model="newAgent.engine" @change="onNewAgentEngineChange()" class="w-full bg-slate-800 text-slate-100 px-3.5 py-2.5 rounded-xl border border-slate-700 outline-none">
               <option value="antigravity">Google Antigravity SDK</option>
               <option value="claude-code">Claude Code SDK</option>
               <option value="codex">OpenAI Codex</option>
@@ -495,6 +495,84 @@
             <option value="unrestricted">Pełna swoboda (Brak ograniczeń ścieżek na hoście)</option>
             <option value="disabled">Wyłączony (Brak dostępu do terminala)</option>
           </select>
+        </div>
+
+        <!-- SEKCJA POŁĄCZENIA: KLUCZ SDK LUB API -->
+        <div class="p-3.5 bg-slate-950/80 rounded-xl border border-slate-800 space-y-3">
+          <div class="flex items-center justify-between">
+            <label class="block text-xs font-semibold text-slate-200 flex items-center gap-1.5">
+              <span>🔑</span> Połączenie Agenta
+            </label>
+            <span class="text-[10px] text-slate-400">Klucz: API lub SDK</span>
+          </div>
+
+          <!-- Przełącznik metody: Klucz API vs Klucz SDK -->
+          <div class="grid grid-cols-2 gap-2">
+            <button type="button"
+                    @click="newAgent.auth_type = 'api'; newAgent.import_server_auth = false; haptic();"
+                    :class="newAgent.auth_type === 'api' ? 'bg-emerald-950/70 border-emerald-500/60 text-emerald-300 font-bold' : 'bg-slate-900 border-slate-800 text-slate-400 hover:text-slate-200'"
+                    class="py-2 px-3 rounded-lg border text-xs flex items-center justify-center gap-1.5 transition">
+              <span>🔑</span>
+              <span>Klucz API</span>
+            </button>
+            <button type="button"
+                    @click="newAgent.auth_type = 'sdk'; haptic();"
+                    :class="newAgent.auth_type === 'sdk' ? 'bg-emerald-950/70 border-emerald-500/60 text-emerald-300 font-bold' : 'bg-slate-900 border-slate-800 text-slate-400 hover:text-slate-200'"
+                    class="py-2 px-3 rounded-lg border text-xs flex items-center justify-center gap-1.5 transition">
+              <span>⚡</span>
+              <span>Klucz / Sesja SDK</span>
+            </button>
+          </div>
+
+          <!-- 1-Click Server Import Banner w kreatorze -->
+          <template x-if="localCliDetected && (localCliDetected[newAgent.engine] || localCliDetected[newAgent.engine.replace('-', '_')]) && (localCliDetected[newAgent.engine] || localCliDetected[newAgent.engine.replace('-', '_')]).available">
+            <div class="p-2.5 bg-emerald-950/40 border border-emerald-500/40 rounded-lg flex items-center justify-between gap-2 text-xs">
+              <div class="min-w-0">
+                <p class="font-bold text-emerald-300 text-[11px] truncate flex items-center gap-1">
+                  <span>⚡</span> Wykryto aktywną sesję na serwerze!
+                </p>
+                <p class="text-[10px] text-emerald-400/80 truncate" x-text="(localCliDetected[newAgent.engine] || localCliDetected[newAgent.engine.replace('-', '_')]).description"></p>
+              </div>
+              <button type="button"
+                      @click="newAgent.auth_type = 'sdk'; newAgent.import_server_auth = !newAgent.import_server_auth; if (newAgent.import_server_auth) { newAgent.auth_token = ''; showToast('Wybrano sesję z serwera'); } haptic();"
+                      :class="newAgent.import_server_auth ? 'bg-emerald-600 text-slate-950 font-bold' : 'bg-slate-800 hover:bg-slate-700 text-emerald-300 border border-slate-700'"
+                      class="px-2.5 py-1.5 rounded-lg text-[11px] shrink-0 transition">
+                <span x-text="newAgent.import_server_auth ? '✓ Użyto sesji' : 'Użyj sesji serwera'"></span>
+              </button>
+            </div>
+          </template>
+
+          <!-- Pole wprowadzania klucza -->
+          <div x-show="!newAgent.import_server_auth" class="space-y-1.5">
+            <div class="flex items-center justify-between">
+              <span class="text-[11px] text-slate-400" x-text="newAgent.auth_type === 'api' ? 'Wprowadź Klucz API:' : 'Wprowadź Token sesji SDK:'"></span>
+              <template x-if="newAgent.auth_type === 'api' && newAgent.engine === 'antigravity'">
+                <a href="https://aistudio.google.com" target="_blank" class="text-[10px] text-emerald-400 hover:underline">Google AI Studio ↗</a>
+              </template>
+              <template x-if="newAgent.auth_type === 'api' && newAgent.engine === 'claude-code'">
+                <a href="https://console.anthropic.com/settings/keys" target="_blank" class="text-[10px] text-amber-400 hover:underline">Anthropic Console ↗</a>
+              </template>
+              <template x-if="newAgent.auth_type === 'api' && newAgent.engine === 'codex'">
+                <a href="https://platform.openai.com/api-keys" target="_blank" class="text-[10px] text-cyan-400 hover:underline">OpenAI Platform ↗</a>
+              </template>
+              <template x-if="newAgent.auth_type === 'sdk'">
+                <span class="text-[10px] text-slate-500 font-mono">Sesja ~/.gemini lub ~/.claude</span>
+              </template>
+            </div>
+
+            <input type="password" 
+                   x-model="newAgent.auth_token" 
+                   :placeholder="newAgent.auth_type === 'api' ? (newAgent.engine === 'antigravity' ? 'np. AIzaSy...' : (newAgent.engine === 'claude-code' ? 'np. sk-ant-api...' : 'np. sk-...')) : 'np. token sesji SDK...'"
+                   class="w-full bg-slate-800 text-slate-100 px-3 py-2 rounded-xl border border-slate-700 outline-none font-mono text-xs focus:border-emerald-500">
+            <p class="text-[10px] text-slate-400 leading-tight">
+              Klucz zostanie bezpiecznie zapisany w <code>.auth/session.json</code> (0600). Możesz też pozostawić pole puste i połączyć później.
+            </p>
+          </div>
+
+          <div x-show="newAgent.import_server_auth" class="p-2 bg-emerald-950/20 border border-emerald-500/20 rounded-lg text-[11px] text-emerald-300 flex items-center justify-between">
+            <span>Agent zostanie połączony z istniejącą sesją na serwerze.</span>
+            <button type="button" @click="newAgent.import_server_auth = false" class="text-slate-400 hover:text-slate-200 underline text-[10px]">Wpisz ręcznie</button>
+          </div>
         </div>
 
         <div>
@@ -725,28 +803,28 @@
       <div class="flex items-center justify-between border-b border-slate-800 pb-3">
         <div>
           <h3 class="text-base font-bold text-slate-100 flex items-center gap-2">
-            <span>🔑</span> Subskrypcja SDK: <span class="text-emerald-400" x-text="authTargetAgent ? authTargetAgent.name : ''"></span>
+            <span>🔑</span> Połączenie Agenta: <span class="text-emerald-400" x-text="authTargetAgent ? authTargetAgent.name : ''"></span>
           </h3>
-          <p class="text-xs text-slate-400">Podłącz tego agenta niezależnie do swojego konta.</p>
+          <p class="text-xs text-slate-400">Podłącz tego agenta niezależnie przez klucz API lub token sesji SDK.</p>
         </div>
         <button @click="openAuthModal = false" class="text-slate-400 hover:text-slate-200">✕</button>
       </div>
 
       <!-- Provider Selector Tabs (BEH-030) -->
       <div>
-        <label class="text-[11px] font-semibold text-slate-400 uppercase tracking-wider block mb-1.5">Wybierz dostawcę subskrypcji SDK:</label>
+        <label class="text-[11px] font-semibold text-slate-400 uppercase tracking-wider block mb-1.5">Wybierz dostawcę silnika:</label>
         <div class="grid grid-cols-3 gap-1.5 p-1 bg-slate-950 rounded-xl border border-slate-800">
-          <button @click="selectedAuthProvider = 'antigravity'; activeOAuthFlow = null; authTestResult = null; haptic();"
+          <button @click="selectedAuthProvider = 'antigravity'; authTestResult = null; haptic();"
                   :class="selectedAuthProvider === 'antigravity' ? 'bg-slate-800 text-emerald-400 font-bold border border-emerald-500/30' : 'text-slate-400 hover:text-slate-200'"
                   class="py-1.5 px-2 rounded-lg text-xs flex items-center justify-center gap-1.5 transition">
             <span>🌐</span> <span class="truncate">Google</span>
           </button>
-          <button @click="selectedAuthProvider = 'claude-code'; activeOAuthFlow = null; authTestResult = null; haptic();"
+          <button @click="selectedAuthProvider = 'claude-code'; authTestResult = null; haptic();"
                   :class="selectedAuthProvider === 'claude-code' ? 'bg-slate-800 text-amber-400 font-bold border border-amber-500/30' : 'text-slate-400 hover:text-slate-200'"
                   class="py-1.5 px-2 rounded-lg text-xs flex items-center justify-center gap-1.5 transition">
             <span>🧠</span> <span class="truncate">Claude</span>
           </button>
-          <button @click="selectedAuthProvider = 'codex'; activeOAuthFlow = null; authTestResult = null; haptic();"
+          <button @click="selectedAuthProvider = 'codex'; authTestResult = null; haptic();"
                   :class="selectedAuthProvider === 'codex' ? 'bg-slate-800 text-cyan-400 font-bold border border-cyan-500/30' : 'text-slate-400 hover:text-slate-200'"
                   class="py-1.5 px-2 rounded-lg text-xs flex items-center justify-center gap-1.5 transition">
             <span>⚡</span> <span class="truncate">OpenAI</span>
@@ -755,13 +833,13 @@
       </div>
 
       <!-- 1-Click Server Import Banner (BEH-032) -->
-      <template x-if="localCliDetected && localCliDetected[selectedAuthProvider] && localCliDetected[selectedAuthProvider].available">
+      <template x-if="localCliDetected && (localCliDetected[selectedAuthProvider] || localCliDetected[selectedAuthProvider.replace('-', '_')]) && (localCliDetected[selectedAuthProvider] || localCliDetected[selectedAuthProvider.replace('-', '_')]).available">
         <div class="p-3 bg-emerald-950/40 border border-emerald-500/40 rounded-xl flex items-center justify-between gap-3 text-xs">
           <div>
             <p class="font-bold text-emerald-300 flex items-center gap-1">
               <span>⚡</span> Wykryto aktywną sesję na serwerze!
             </p>
-            <p class="text-[11px] text-emerald-400/80" x-text="localCliDetected[selectedAuthProvider].description"></p>
+            <p class="text-[11px] text-emerald-400/80" x-text="(localCliDetected[selectedAuthProvider] || localCliDetected[selectedAuthProvider.replace('-', '_')]).description"></p>
           </div>
           <button @click="importLocalAuth(selectedAuthProvider)" 
                   class="bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold px-3 py-1.5 rounded-lg text-xs shrink-0 transition shadow-sm">
@@ -774,10 +852,10 @@
       <div class="p-3.5 rounded-xl bg-slate-950 border border-slate-800 space-y-2.5">
         <div class="flex items-center justify-between">
           <div>
-            <p class="text-xs text-slate-400">Stan uwierzytelnienia:</p>
+            <p class="text-xs text-slate-400">Stan połączenia:</p>
             <p class="text-sm font-bold" 
                :class="authStatusDetails && authStatusDetails.authenticated ? 'text-emerald-400' : 'text-amber-400'"
-               x-text="authStatusDetails && authStatusDetails.authenticated ? 'Połączono z subskrypcją' : 'Wymaga zalogowania'"></p>
+               x-text="authStatusDetails && authStatusDetails.authenticated ? 'Połączono (' + ((authStatusDetails.auth_type === 'api') ? 'Klucz API' : 'Klucz/Sesja SDK') + ')' : 'Wymaga połączenia'"></p>
           </div>
           <div class="flex items-center gap-2">
             <button x-show="authStatusDetails && authStatusDetails.authenticated" 
@@ -788,7 +866,7 @@
               Testuj połączenie
             </button>
             <div x-show="authStatusDetails && authStatusDetails.masked_token" class="text-right">
-              <p class="text-xs text-slate-400">Token:</p>
+              <p class="text-xs text-slate-400">Klucz / Token:</p>
               <code class="text-xs text-slate-300 font-mono" x-text="authStatusDetails.masked_token"></code>
             </div>
           </div>
@@ -804,122 +882,69 @@
         </template>
       </div>
 
-      <!-- Auth Method Selector Tabs -->
-      <div class="flex border-b border-slate-800 text-xs">
-        <button @click="authTab = 'auto'; haptic();" 
-                :class="authTab === 'auto' ? 'border-b-2 border-emerald-500 text-emerald-400 font-bold' : 'text-slate-400 hover:text-slate-200'"
-                class="pb-2 px-3 transition">
-          Automatyczne Logowanie (OAuth)
-        </button>
-        <button @click="authTab = 'manual'; haptic();" 
-                :class="authTab === 'manual' ? 'border-b-2 border-emerald-500 text-emerald-400 font-bold' : 'text-slate-400 hover:text-slate-200'"
-                class="pb-2 px-3 transition">
-          Ręczne Wklejenie Tokena
-        </button>
-      </div>
-
-      <!-- TAB 1: AUTOMATIC OAUTH / DEVICE CODE (BEH-031) -->
-      <div x-show="authTab === 'auto'" class="space-y-3 text-xs">
-        <!-- Antigravity / Google View -->
-        <div x-show="selectedAuthProvider === 'antigravity'" class="space-y-3">
-          <p class="text-slate-300 leading-relaxed">
-            Generuje sesję autoryzacyjną urządzenia (RFC 8628). Otrzymasz kod i link do zatwierdzenia na koncie Google.
-          </p>
-
-          <template x-if="!activeOAuthFlow">
-            <button @click="startOAuthFlow()" class="w-full bg-slate-800 hover:bg-slate-700 text-slate-100 font-bold py-2.5 rounded-xl border border-slate-700 transition flex items-center justify-center gap-2">
-              <span>🌐 Rozpocznij połączenie z Google Antigravity</span>
-            </button>
-          </template>
-
-          <template x-if="activeOAuthFlow">
-            <div class="bg-slate-950 p-4 rounded-xl border border-emerald-500/30 space-y-3">
-              <!-- Warning when not configured with Google Cloud OAuth keys -->
-              <div x-show="activeOAuthFlow.warning" class="p-2.5 bg-amber-950/40 border border-amber-500/40 rounded-lg text-amber-300 text-[11px] leading-relaxed flex flex-col gap-1.5">
-                <div class="flex items-start gap-1.5">
-                  <span>⚠️</span>
-                  <span x-text="activeOAuthFlow.warning"></span>
-                </div>
-                <div class="flex justify-end">
-                  <button @click="authTab = 'manual'; haptic();" class="text-amber-200 underline font-semibold hover:text-white">
-                    Przejdź do Ręcznego Wklejenia Tokena →
-                  </button>
-                </div>
-              </div>
-
-              <p class="text-slate-200 font-medium">1. Otwórz stronę autoryzacji urządzenia (RFC 8628):</p>
-              <div class="flex gap-2">
-                <a :href="activeOAuthFlow.verification_uri_complete || activeOAuthFlow.verification_url" target="_blank" class="flex-1 block text-emerald-400 font-mono text-xs underline break-all bg-slate-900 p-2.5 rounded-lg border border-slate-800 hover:border-emerald-500 transition" x-text="activeOAuthFlow.verification_uri || activeOAuthFlow.verification_url"></a>
-                <a :href="activeOAuthFlow.verification_uri_complete || activeOAuthFlow.verification_url" target="_blank" class="bg-emerald-600 hover:bg-emerald-500 text-slate-950 font-bold px-3 py-2 rounded-lg text-xs flex items-center gap-1 transition shrink-0">
-                  <span>Otwórz</span> ↗
-                </a>
-              </div>
-              
-              <p class="text-slate-200 font-medium">2. Wprowadź poniższy kod urządzenia (Device User Code):</p>
-              <div class="bg-slate-900 p-3 rounded-xl border border-slate-800 text-center flex items-center justify-center gap-3">
-                <strong class="text-lg text-emerald-400 font-mono tracking-widest" x-text="activeOAuthFlow.user_code"></strong>
-                <button @click="navigator.clipboard.writeText(activeOAuthFlow.user_code); showToast('Skopiowano kod!');" class="text-slate-400 hover:text-slate-200 text-xs px-2 py-1 bg-slate-800 rounded border border-slate-700">Kopiuj</button>
-              </div>
-
-              <div class="flex gap-2 pt-1">
-                <button @click="pollDeviceAuth()" class="flex-1 bg-slate-800 hover:bg-slate-700 text-slate-200 font-semibold py-2 rounded-lg border border-slate-700 text-xs flex items-center justify-center gap-1.5 transition">
-                  <span>🔄</span> Sprawdź status (RFC 8628 Poll)
-                </button>
-              </div>
-
-              <div class="pt-2 border-t border-slate-800/80">
-                <p class="text-[11px] text-slate-400 mb-1.5">Lub wklej kod autoryzacyjny ręcznie:</p>
-                <div class="flex gap-2">
-                  <input type="text" x-model="authCodeInput" placeholder="Wklej kod autoryzacyjny / token..." class="flex-1 bg-slate-800 text-slate-100 px-3 py-2 rounded-lg border border-slate-700 outline-none font-mono text-xs">
-                  <button @click="verifyOAuthCode()" class="bg-emerald-600 hover:bg-emerald-500 text-slate-950 font-bold px-4 py-2 rounded-lg text-xs transition">Zatwierdź</button>
-                </div>
-              </div>
-            </div>
-          </template>
-        </div>
-
-        <!-- Claude Code & OpenAI View -->
-        <div x-show="selectedAuthProvider !== 'antigravity'" class="p-3.5 bg-slate-950 border border-slate-800 rounded-xl space-y-2.5">
-          <p class="text-slate-300 leading-relaxed">
-            Dostawca <strong class="text-slate-100" x-text="selectedAuthProvider === 'claude-code' ? 'Anthropic Claude Code' : 'OpenAI Codex'"></strong> nie udostępnia publicznego protokołu RFC 8628 Device Code dla subskrypcji użytkowników.
-          </p>
-          <p class="text-slate-400 text-[11px]">
-            Aby połączyć tego agenta bezpłatnie ze swoją istniejącą subskrypcją, skorzystaj z <strong>Importu sesji z serwera</strong> (powyżej) lub przejdź do zakładki <strong>Ręczne Wklejenie Tokena</strong>.
-          </p>
-          <button @click="authTab = 'manual'; haptic();" class="w-full bg-slate-800 hover:bg-slate-700 text-slate-200 font-semibold py-2 rounded-lg border border-slate-700 text-xs transition">
-            Otwórz Ręczne Wklejenie Tokena →
+      <!-- POŁĄCZENIE PRZEZ KLUCZ: SDK LUB API -->
+      <div class="space-y-3 text-xs">
+        <!-- Przełącznik: Klucz API vs Klucz SDK -->
+        <div class="grid grid-cols-2 gap-2">
+          <button type="button"
+                  @click="authKeyType = 'api'; haptic();" 
+                  :class="authKeyType === 'api' ? 'bg-emerald-950/70 border-emerald-500/60 text-emerald-300 font-bold' : 'bg-slate-950 border-slate-800 text-slate-400 hover:text-slate-200'"
+                  class="py-2 px-3 rounded-lg border text-xs flex items-center justify-center gap-1.5 transition">
+            <span>🔑</span> Klucz API
+          </button>
+          <button type="button"
+                  @click="authKeyType = 'sdk'; haptic();" 
+                  :class="authKeyType === 'sdk' ? 'bg-emerald-950/70 border-emerald-500/60 text-emerald-300 font-bold' : 'bg-slate-950 border-slate-800 text-slate-400 hover:text-slate-200'"
+                  class="py-2 px-3 rounded-lg border text-xs flex items-center justify-center gap-1.5 transition">
+            <span>⚡</span> Klucz / Sesja SDK
           </button>
         </div>
-      </div>
 
-      <!-- TAB 2: MANUAL TOKEN PASTE & GUIDES (BEH-034) -->
-      <div x-show="authTab === 'manual'" class="space-y-3 text-xs">
         <!-- Interactive Guide Box -->
         <div class="p-3 bg-slate-950 border border-slate-800 rounded-xl space-y-1.5">
           <p class="font-bold text-slate-200 flex items-center gap-1.5">
-            <span>💡</span> Gdzie znaleźć token dla <span class="text-emerald-400 uppercase tracking-wide" x-text="selectedAuthProvider"></span>:
+            <span>💡</span> Gdzie znaleźć klucz dla <span class="text-emerald-400 uppercase tracking-wide" x-text="selectedAuthProvider"></span>:
           </p>
           <div x-show="selectedAuthProvider === 'antigravity'" class="text-slate-400 text-[11px] space-y-1">
-            <p>• <strong>Klucz API:</strong> Wygeneruj bezpłatny klucz w <a href="https://aistudio.google.com" target="_blank" class="text-emerald-400 underline">Google AI Studio</a>.</p>
-            <p>• <strong>Z sesji CLI:</strong> Odczytaj token z pliku <code>~/.gemini/antigravity-cli/.credentials.json</code>.</p>
+            <template x-if="authKeyType === 'api'">
+              <p>• <strong>Klucz API:</strong> Wygeneruj bezpłatny klucz w <a href="https://aistudio.google.com" target="_blank" class="text-emerald-400 underline">Google AI Studio ↗</a>.</p>
+            </template>
+            <template x-if="authKeyType === 'sdk'">
+              <p>• <strong>Klucz SDK (Sesja CLI):</strong> Użyj 1-klikowego importu z serwera powyżej lub skopiuj token z <code>~/.gemini/antigravity-cli/.credentials.json</code>.</p>
+            </template>
           </div>
           <div x-show="selectedAuthProvider === 'claude-code'" class="text-slate-400 text-[11px] space-y-1">
-            <p>• <strong>Z sesji CLI (Rekomendowane):</strong> Użyj przycisku importu powyżej lub skopiuj <code>accessToken</code> z <code>~/.claude/.credentials.json</code>.</p>
-            <p>• <strong>Klucz API:</strong> Pobierz klucz z <a href="https://console.anthropic.com/settings/keys" target="_blank" class="text-amber-400 underline">Anthropic Console</a>.</p>
+            <template x-if="authKeyType === 'api'">
+              <p>• <strong>Klucz API:</strong> Pobierz klucz z <a href="https://console.anthropic.com/settings/keys" target="_blank" class="text-amber-400 underline">Anthropic Console ↗</a>.</p>
+            </template>
+            <template x-if="authKeyType === 'sdk'">
+              <p>• <strong>Klucz SDK (Sesja CLI):</strong> Użyj 1-klikowego importu z serwera powyżej lub skopiuj <code>accessToken</code> z <code>~/.claude/.credentials.json</code>.</p>
+            </template>
           </div>
           <div x-show="selectedAuthProvider === 'codex'" class="text-slate-400 text-[11px] space-y-1">
-            <p>• <strong>Klucz OpenAI:</strong> Pobierz klucz z <a href="https://platform.openai.com/api-keys" target="_blank" class="text-cyan-400 underline">platform.openai.com/api-keys</a>.</p>
+            <template x-if="authKeyType === 'api'">
+              <p>• <strong>Klucz API:</strong> Pobierz klucz z <a href="https://platform.openai.com/api-keys" target="_blank" class="text-cyan-400 underline">OpenAI Platform ↗</a>.</p>
+            </template>
+            <template x-if="authKeyType === 'sdk'">
+              <p>• <strong>Klucz SDK:</strong> Token z konfiguracji sesji OpenAI CLI.</p>
+            </template>
           </div>
         </div>
 
-        <p class="text-slate-300">
-          Wklej token sesji subskrypcji SDK dla tego agenta. Zostanie on zapisany w odizolowanym pliku <code>.auth/session.json</code> z uprawnieniami <code>0600</code>.
-        </p>
-        <textarea x-model="manualTokenInput" rows="3" placeholder="Wklej token sesji SDK lub klucz API..." class="w-full bg-slate-800 text-slate-100 p-3 rounded-xl border border-slate-700 font-mono text-xs outline-none focus:border-emerald-500"></textarea>
+        <div>
+          <label class="block text-slate-300 font-medium mb-1.5" x-text="authKeyType === 'api' ? 'Wklej Klucz API:' : 'Wklej Token sesji SDK:'"></label>
+          <textarea x-model="manualTokenInput" 
+                    rows="3" 
+                    :placeholder="authKeyType === 'api' ? (selectedAuthProvider === 'antigravity' ? 'np. AIzaSy...' : (selectedAuthProvider === 'claude-code' ? 'np. sk-ant-api...' : 'np. sk-...')) : 'np. token sesji SDK...'" 
+                    class="w-full bg-slate-800 text-slate-100 p-3 rounded-xl border border-slate-700 font-mono text-xs outline-none focus:border-emerald-500"></textarea>
+          <p class="text-[10px] text-slate-400 mt-1">
+            Klucz jest zapisywany w odizolowanym pliku <code>.auth/session.json</code> z uprawnieniami <code>0600</code>.
+          </p>
+        </div>
         
         <div class="flex gap-2">
           <button @click="saveManualToken()" class="flex-1 bg-emerald-600 hover:bg-emerald-500 text-slate-950 font-bold py-2.5 rounded-xl transition">
-            Zapisz Token dla Agenta
+            Zapisz Klucz dla Agenta
           </button>
         </div>
       </div>
@@ -927,7 +952,7 @@
       <!-- Disconnect Option -->
       <div x-show="authStatusDetails && authStatusDetails.authenticated" class="pt-3 border-t border-slate-800 flex justify-between items-center text-xs">
         <span class="text-slate-400">Chcesz usunąć poświadczenia?</span>
-        <button @click="disconnectAgentAuth()" class="text-red-400 hover:text-red-300 font-semibold transition">Rozłącz Subskrypcję</button>
+        <button @click="disconnectAgentAuth()" class="text-red-400 hover:text-red-300 font-semibold transition">Rozłącz Klucz</button>
       </div>
     </div>
   </div>
@@ -970,7 +995,10 @@
           model: 'gemini-3.8-flash',
           terminal_mode: 'restricted',
           master_prompt: 'Jesteś autonomicznym analitykiem AI.',
-          instructions: 'Zawsze odpowiadaj zwięźle i precyzyjnie.'
+          instructions: 'Zawsze odpowiadaj zwięźle i precyzyjnie.',
+          auth_type: 'api',
+          auth_token: '',
+          import_server_auth: false
         },
 
         // Edit Modal
@@ -1005,12 +1033,10 @@
         openAuthModal: false,
         authTargetAgent: null,
         authStatusDetails: null,
-        authTab: 'auto',
+        authKeyType: 'api',
         selectedAuthProvider: 'antigravity',
         localCliDetected: { claude_code: { available: false }, antigravity: { available: false }, codex: { available: false } },
         authTestResult: null,
-        activeOAuthFlow: null,
-        authCodeInput: '',
         manualTokenInput: '',
 
         haptic() {
@@ -1055,6 +1081,7 @@
             }
           } catch (_) {}
 
+          await this.detectLocalAuth();
           await this.loadAgents();
           if (this.agents.length > 0) {
             this.selectAgentForChat(this.agents[0]);
@@ -1341,13 +1368,55 @@
           }
         },
 
+        async openCreateModalDialog() {
+          this.haptic();
+          this.newAgent = {
+            name: '',
+            slug: '',
+            engine: 'antigravity',
+            model: 'gemini-3.8-flash',
+            terminal_mode: 'restricted',
+            master_prompt: 'Jesteś autonomicznym analitykiem AI.',
+            instructions: 'Zawsze odpowiadaj zwięźle i precyzyjnie.',
+            auth_type: 'api',
+            auth_token: '',
+            import_server_auth: false
+          };
+          await this.detectLocalAuth();
+          this.openCreateModal = true;
+        },
+
+        onNewAgentEngineChange() {
+          if (this.newAgent.engine === 'antigravity') {
+            this.newAgent.model = 'gemini-3.8-flash';
+          } else if (this.newAgent.engine === 'claude-code') {
+            this.newAgent.model = 'claude-3-7-sonnet-20250219';
+          } else if (this.newAgent.engine === 'codex') {
+            this.newAgent.model = 'gpt-4o';
+          }
+          this.newAgent.import_server_auth = false;
+        },
+
         async submitCreateAgent() {
           this.haptic();
           try {
+            const payload = {
+              name: this.newAgent.name,
+              slug: this.newAgent.slug,
+              engine: this.newAgent.engine,
+              model: this.newAgent.model,
+              terminal_mode: this.newAgent.terminal_mode,
+              master_prompt: this.newAgent.master_prompt,
+              instructions: this.newAgent.instructions,
+              auth_type: this.newAgent.auth_type,
+              auth_token: this.newAgent.auth_token ? this.newAgent.auth_token.trim() : null,
+              import_local_auth: Boolean(this.newAgent.import_server_auth)
+            };
+
             const res = await this.apiFetch('/api/agents', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify(this.newAgent)
+              body: JSON.stringify(payload)
             });
 
             if (res.ok) {
@@ -1639,9 +1708,8 @@
           this.haptic();
           this.authTargetAgent = agent;
           this.selectedAuthProvider = agent.engine || 'antigravity';
-          this.activeOAuthFlow = null;
+          this.authKeyType = (agent.auth && agent.auth.auth_type) || 'api';
           this.manualTokenInput = '';
-          this.authCodeInput = '';
           this.authTestResult = null;
           this.openAuthModal = true;
           await this.refreshAuthDetails();
@@ -1649,9 +1717,9 @@
         },
 
         async detectLocalAuth() {
-          if (!this.authTargetAgent) return;
           try {
-            const res = await this.apiFetch(`/api/agents/${this.authTargetAgent.slug}/auth/local-detect`);
+            const url = this.authTargetAgent ? `/api/agents/${this.authTargetAgent.slug}/auth/local-detect` : '/api/agents/auth/local-detect';
+            const res = await this.apiFetch(url);
             if (res.ok) {
               this.localCliDetected = await res.json();
             }
@@ -1709,75 +1777,6 @@
           }
         },
 
-        async startOAuthFlow() {
-          try {
-            const res = await this.apiFetch(`/api/agents/${this.authTargetAgent.slug}/auth/start`, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ provider: this.selectedAuthProvider })
-            });
-            this.activeOAuthFlow = await res.json();
-          } catch (e) {
-            alert(`Błąd startu logowania: ${e.message}`);
-          }
-        },
-
-        async verifyOAuthCode() {
-          try {
-            const res = await this.apiFetch(`/api/agents/${this.authTargetAgent.slug}/auth/verify`, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                flow_id: this.activeOAuthFlow.flow_id,
-                auth_code: this.authCodeInput
-              })
-            });
-            if (res.ok) {
-              await this.refreshAuthDetails();
-              await this.loadAgents();
-              this.activeOAuthFlow = null;
-              this.authCodeInput = '';
-              await this.testAgentAuth();
-            } else {
-              const err = await res.json();
-              alert(err.detail || 'Błąd autoryzacji');
-            }
-          } catch (e) {
-            alert(e.message);
-          }
-        },
-
-        async pollDeviceAuth() {
-          this.haptic();
-          if (!this.activeOAuthFlow || !this.authTargetAgent) return;
-          try {
-            const res = await this.apiFetch(`/api/agents/${this.authTargetAgent.slug}/auth/device-poll`, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ flow_id: this.activeOAuthFlow.flow_id })
-            });
-            if (res.ok) {
-              const data = await res.json();
-              if (data.status === 'success') {
-                this.showToast('Autoryzacja RFC 8628 zakończona sukcesem!');
-                await this.refreshAuthDetails();
-                await this.loadAgents();
-                this.activeOAuthFlow = null;
-                await this.testAgentAuth();
-                return true;
-              } else {
-                this.showToast(data.message || 'Oczekiwanie na zatwierdzenie w przeglądarce...');
-              }
-            } else {
-              const err = await res.json();
-              alert(err.detail || 'Błąd pollingu');
-            }
-          } catch (e) {
-            console.warn('Poll device auth failed:', e);
-          }
-          return false;
-        },
-
         async saveManualToken() {
           try {
             const res = await this.apiFetch(`/api/agents/${this.authTargetAgent.slug}/auth/manual`, {
@@ -1785,18 +1784,19 @@
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({
                 token: this.manualTokenInput,
-                provider: this.selectedAuthProvider
+                provider: this.selectedAuthProvider,
+                auth_type: this.authKeyType
               })
             });
             if (res.ok) {
               await this.refreshAuthDetails();
               await this.loadAgents();
               this.manualTokenInput = '';
-              this.showToast('Zapisano token!');
+              this.showToast('Zapisano klucz!');
               await this.testAgentAuth();
             } else {
               const err = await res.json();
-              alert(err.detail || 'Błąd zapisu tokena');
+              alert(err.detail || 'Błąd zapisu klucza');
             }
           } catch (e) {
             alert(e.message);
@@ -1804,12 +1804,13 @@
         },
 
         async disconnectAgentAuth() {
-          if (!confirm('Czy na pewno chcesz rozłączyć subskrypcję tego agenta?')) return;
+          if (!confirm('Czy na pewno chcesz rozłączyć klucz tego agenta?')) return;
           try {
             const res = await this.apiFetch(`/api/agents/${this.authTargetAgent.slug}/auth/disconnect`, {
               method: 'POST'
             });
             if (res.ok) {
+              this.showToast('Rozłączono poświadczenia agenta');
               await this.refreshAuthDetails();
               await this.loadAgents();
             }
