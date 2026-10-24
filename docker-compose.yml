@@ -16,7 +16,6 @@ services:
       - BEHERIT_DB_PATH=/app/data/beherit.db
       - BEHERIT_ACCESS_TOKEN=${BEHERIT_ACCESS_TOKEN:-}
       - BEHERIT_SECRET_KEY=${BEHERIT_SECRET_KEY:-}
-      - BEHERIT_CORS_ORIGINS=*
     volumes:
       - ./data:/app/data
     healthcheck:
