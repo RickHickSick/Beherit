@@ -83,6 +83,13 @@ class AntigravityEngine(BaseAgentEngine):
         """
         # Verify credentials before launching
         if not self.auth_manager.is_authenticated(agent.slug):
+            if self.cli_binary and (Path.home() / ".gemini").exists():
+                try:
+                    self.auth_manager.import_local_cli_session(agent.slug, provider=EngineType.ANTIGRAVITY)
+                except Exception:
+                    pass
+
+        if not self.auth_manager.is_authenticated(agent.slug) and not (self.cli_binary and (Path.home() / ".gemini").exists()):
             yield {
                 "event": "error",
                 "data": {
@@ -126,13 +133,21 @@ class AntigravityEngine(BaseAgentEngine):
         if self.cli_binary:
             cmd = [
                 self.cli_binary,
+                "--dangerously-skip-permissions",
                 "--output-format",
                 "stream-json",
-                "--model",
-                agent.model,
-                "--print",
-                full_turn_prompt,
             ]
+            model_flag = agent.model or ""
+            if "3.8" in model_flag or "flash" in model_flag.lower():
+                cmd.extend(["--model", "Gemini 3.8 Flash (High)"])
+            elif "sonnet" in model_flag.lower():
+                cmd.extend(["--model", "Claude Sonnet 4.6 (Thinking)"])
+            elif "opus" in model_flag.lower():
+                cmd.extend(["--model", "Claude Opus 4.6 (Thinking)"])
+            elif model_flag and " " in model_flag:
+                cmd.extend(["--model", model_flag])
+
+            cmd.extend(["--print", full_turn_prompt])
 
             process = None
             try:

@@ -19,6 +19,8 @@ services:
     volumes:
       - ./data:/app/data
       - ~/.claude:/root/.claude:ro
+      - ~/.local/bin/agy:/usr/local/bin/agy:ro
+      - ~/.gemini:/root/.gemini
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8650/api/health"]
       interval: 30s

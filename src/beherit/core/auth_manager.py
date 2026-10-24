@@ -154,7 +154,8 @@ class AgentAuthManager:
         home = Path.home()
         claude_creds = home / ".claude" / ".credentials.json"
         gemini_creds = home / ".gemini" / "antigravity-cli" / ".credentials.json"
-        gemini_config = home / ".gemini" / "config" / "config.json"
+        gemini_oauth = home / ".gemini" / "antigravity-cli" / "antigravity-oauth-token"
+        gemini_dir = home / ".gemini"
 
         claude_found = False
         claude_tier = None
@@ -169,7 +170,7 @@ class AgentAuthManager:
                 pass
 
         antigravity_found = False
-        if gemini_creds.exists():
+        if gemini_creds.exists() or gemini_oauth.exists() or (gemini_dir / "antigravity-cli").exists():
             antigravity_found = True
         elif os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY"):
             antigravity_found = True
@@ -249,8 +250,14 @@ class AgentAuthManager:
 
         elif provider == EngineType.ANTIGRAVITY:
             gemini_creds = home / ".gemini" / "antigravity-cli" / ".credentials.json"
+            gemini_oauth = home / ".gemini" / "antigravity-cli" / "antigravity-oauth-token"
             token = None
-            if gemini_creds.exists():
+            if gemini_oauth.exists():
+                try:
+                    token = gemini_oauth.read_text(encoding="utf-8").strip()
+                except Exception:
+                    pass
+            if not token and gemini_creds.exists():
                 try:
                     g_data = json.loads(gemini_creds.read_text(encoding="utf-8"))
                     token = g_data.get("token") or g_data.get("access_token")
@@ -259,6 +266,9 @@ class AgentAuthManager:
 
             if not token:
                 token = os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY")
+
+            if not token and (home / ".gemini").exists():
+                token = "antigravity-host-session"
 
             if not token:
                 raise ValueError("Nie znaleziono poświadczeń Google Antigravity ani klucza GEMINI_API_KEY na serwerze.")
