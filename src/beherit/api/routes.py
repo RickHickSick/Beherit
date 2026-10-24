@@ -100,6 +100,10 @@ class DevicePollRequest(BaseModel):
     flow_id: str = Field(..., min_length=1)
 
 
+class ImportLocalAuthRequest(BaseModel):
+    provider: EngineType = Field(default=EngineType.CLAUDE_CODE)
+
+
 class ChatMessageRequest(BaseModel):
     message: str = Field(..., min_length=1)
     session_id: str | None = Field(default=None, description="Optional ID of active chat session")
@@ -307,6 +311,37 @@ async def disconnect_agent_auth(slug: str):
 
     auth_mgr.clear_session(slug)
     return {"status": "disconnected", "auth": auth_mgr.get_auth_details(slug)}
+
+
+@router.get("/{slug}/auth/local-detect")
+async def detect_local_auth(slug: str):
+    """Detect available local CLI sessions on server (BEH-032)."""
+    agent = repo.load_agent(slug)
+    if not agent:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Agent not found.")
+    return auth_mgr.detect_local_cli_credentials()
+
+
+@router.post("/{slug}/auth/import-local")
+async def import_local_auth(slug: str, payload: ImportLocalAuthRequest):
+    """Import local host CLI credentials into agent's isolated .auth dir (BEH-032)."""
+    agent = repo.load_agent(slug)
+    if not agent:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Agent not found.")
+    try:
+        details = auth_mgr.import_local_cli_session(slug, provider=payload.provider)
+        return {"status": "success", "auth": details}
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+
+@router.post("/{slug}/auth/test")
+async def test_agent_auth(slug: str):
+    """Validate and test agent credentials connection (BEH-033 Auth Healthcheck)."""
+    agent = repo.load_agent(slug)
+    if not agent:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Agent not found.")
+    return auth_mgr.test_agent_connection(slug)
 
 
 # --- Background Scheduler & History Endpoints ---

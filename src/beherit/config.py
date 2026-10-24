@@ -50,6 +50,16 @@ class Settings(BaseSettings):
         description="CORS allowed origins",
     )
 
+    # Optional OAuth 2.0 Credentials (RFC 8628 Device Flow)
+    GOOGLE_OAUTH_CLIENT_ID: str | None = Field(
+        default=None,
+        description="Optional Google Cloud OAuth 2.0 Client ID for RFC 8628 Device Authorization",
+    )
+    GOOGLE_OAUTH_CLIENT_SECRET: str | None = Field(
+        default=None,
+        description="Optional Google Cloud OAuth 2.0 Client Secret",
+    )
+
     # Optional Database Connector
     DATABASE_URL: str | None = Field(
         default=None,

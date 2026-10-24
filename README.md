@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="src/beherit/static/icon.png" width="120" height="120" alt="Beherit Logo" style="border-radius: 20px;">
+</p>
+
 # Beherit 🧿
 
 > **Autonomous AI Agent Management Platform powered by Agent SDKs with Per-Agent Subscription Isolation.**

@@ -76,7 +76,7 @@ To add Beherit to your Homepage dashboard (`services.yaml`), add:
 ```yaml
 - AI & Automation:
     - Beherit:
-        icon: si-robot
+        icon: http://<your-server-ip>:8650/static/icon.png
         href: http://<your-server-ip>:8650
         description: Autonomous AI Agent Platform
         widget:
@@ -86,3 +86,5 @@ To add Beherit to your Homepage dashboard (`services.yaml`), add:
             - field: status
               label: Status
 ```
+
+> **Tip:** Beherit serves its official logo directly at `/static/icon.png`, `/logo.png`, and `/favicon.ico`. In homelab dashboards like Homepage, Dashy, or Heimdall, you can point the icon directly to `http://<your-server-ip>:8650/static/icon.png` (or `http://<your-server-ip>:8650/logo.png`).

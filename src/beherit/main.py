@@ -96,6 +96,35 @@ if STATIC_DIR.exists():
     app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 
 
+@app.get("/favicon.ico", include_in_schema=False)
+async def favicon():
+    fav = STATIC_DIR / "favicon.ico"
+    if fav.exists():
+        return FileResponse(fav)
+    icon = STATIC_DIR / "icon.png"
+    if icon.exists():
+        return FileResponse(icon)
+    return JSONResponse(status_code=404, content={"detail": "Favicon not found"})
+
+
+@app.get("/logo.png", include_in_schema=False)
+@app.get("/icon.png", include_in_schema=False)
+async def logo():
+    icon = STATIC_DIR / "icon.png"
+    if icon.exists():
+        return FileResponse(icon)
+    return JSONResponse(status_code=404, content={"detail": "Logo not found"})
+
+
+@app.get("/manifest.json", include_in_schema=False)
+@app.get("/manifest.webmanifest", include_in_schema=False)
+async def manifest():
+    manifest_file = STATIC_DIR / "manifest.json"
+    if manifest_file.exists():
+        return FileResponse(manifest_file, media_type="application/manifest+json")
+    return JSONResponse(status_code=404, content={"detail": "Manifest not found"})
+
+
 @app.get("/")
 async def root_index():
     """Serve the Web UI / Safari iOS PWA."""

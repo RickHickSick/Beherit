@@ -224,3 +224,34 @@ def test_reports_view_api(tmp_path: Path):
     resp_sec = client.get("/api/reports/view?path=/etc/shadow.md")
     assert resp_sec.status_code in (403, 404)
 
+
+def test_logo_and_brand_assets_endpoints():
+    """Verify BEH-LOGO: Brand icon, favicon, and manifest endpoints for UI and Homelab dashboards."""
+    # 1. Favicon endpoint
+    fav_resp = client.get("/favicon.ico")
+    assert fav_resp.status_code == 200
+    assert "image" in fav_resp.headers.get("content-type", "")
+
+    # 2. Logo / icon endpoint
+    logo_resp = client.get("/logo.png")
+    assert logo_resp.status_code == 200
+    assert logo_resp.headers.get("content-type") == "image/png"
+
+    icon_resp = client.get("/icon.png")
+    assert icon_resp.status_code == 200
+    assert icon_resp.headers.get("content-type") == "image/png"
+
+    # 3. PWA manifest endpoint
+    manifest_resp = client.get("/manifest.json")
+    assert manifest_resp.status_code == 200
+    assert "manifest" in manifest_resp.headers.get("content-type", "")
+    manifest_data = manifest_resp.json()
+    assert "Beherit" in manifest_data["name"]
+    assert len(manifest_data["icons"]) > 0
+
+    # 4. Web UI contains brand references
+    index_resp = client.get("/")
+    assert index_resp.status_code == 200
+    assert "/static/icon.png" in index_resp.text
+
+

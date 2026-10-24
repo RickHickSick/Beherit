@@ -7,8 +7,13 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="Beherit">
   <meta name="theme-color" content="#0f172a">
-  <link rel="icon" type="image/png" href="/static/icon.png">
-  <link rel="apple-touch-icon" href="/static/icon.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="/static/icon-32.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/static/icon-16.png">
+  <link rel="icon" type="image/png" href="/static/icon.png?v=2">
+  <link rel="apple-touch-icon" sizes="180x180" href="/static/apple-touch-icon.png">
+  <link rel="apple-touch-icon" href="/static/icon.png?v=2">
+  <link rel="shortcut icon" href="/favicon.ico">
+  <link rel="manifest" href="/manifest.json">
   <title>Beherit — Środowisko Agentów AI</title>
   
   <!-- Tailwind CSS & Alpine.js -->
@@ -77,11 +82,14 @@
   <!-- LOCK SCREEN: PIN / ACCESS TOKEN GUARD -->
   <div x-show="showAuthLockScreen" class="fixed inset-0 z-50 bg-slate-950/95 backdrop-blur-md flex items-center justify-center p-4" style="display: none;">
     <div class="bg-slate-900 border border-slate-800 w-full max-w-sm rounded-2xl p-6 shadow-2xl space-y-4 text-center">
-      <div class="w-12 h-12 rounded-2xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 flex items-center justify-center text-2xl mx-auto shadow-lg shadow-emerald-500/10">
-        🔒
+      <div class="relative mx-auto w-16 h-16">
+        <img src="/static/icon.png?v=2" alt="Beherit Logo" class="w-16 h-16 rounded-2xl mx-auto shadow-xl ring-1 ring-emerald-500/30 object-cover">
+        <div class="absolute -bottom-1 -right-1 w-6 h-6 rounded-full bg-slate-900 border border-slate-700 flex items-center justify-center text-xs shadow">
+          🔒
+        </div>
       </div>
       <div>
-        <h3 class="text-lg font-bold text-slate-100">Dostęp Zabezpieczony</h3>
+        <h3 class="text-lg font-bold text-slate-100">Beherit — Dostęp Zabezpieczony</h3>
         <p class="text-xs text-slate-400 mt-1">Podaj kod PIN lub klucz BEHERIT_ACCESS_TOKEN, aby odblokować panel.</p>
       </div>
       <form @submit.prevent="submitPinAuth()" class="space-y-3">
@@ -108,9 +116,7 @@
   <!-- Top Navigation Bar -->
   <header class="border-b border-slate-800 bg-slate-900/80 backdrop-blur sticky top-0 z-40 px-4 py-3 flex items-center justify-between shrink-0">
     <div class="flex items-center space-x-3">
-      <div class="w-9 h-9 rounded-xl bg-gradient-to-tr from-emerald-500 to-teal-400 flex items-center justify-center font-black text-slate-950 text-xl shadow-lg shadow-emerald-500/20">
-        🧿
-      </div>
+      <img src="/static/icon.png?v=2" alt="Beherit Logo" class="w-9 h-9 rounded-xl object-cover shadow-lg shadow-emerald-500/20 ring-1 ring-emerald-500/30">
       <div>
         <h1 class="font-bold text-lg leading-tight tracking-tight flex items-center gap-2">
           Beherit <span class="text-xs px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 font-mono">v0.2.0</span>
@@ -170,8 +176,8 @@
               <!-- Header info -->
               <div class="flex items-start justify-between gap-2 mb-3">
                 <div class="flex items-center gap-3">
-                  <div class="w-10 h-10 rounded-xl bg-slate-800 border border-slate-700 flex items-center justify-center text-lg">
-                    🤖
+                  <div class="w-10 h-10 rounded-xl overflow-hidden ring-1 ring-slate-700/80 shrink-0 bg-slate-800 shadow-sm flex items-center justify-center">
+                    <img src="/static/icon.png?v=2" alt="Agent" class="w-full h-full object-cover">
                   </div>
                   <div>
                     <h3 class="font-bold text-base text-slate-100 group-hover:text-emerald-400 transition" x-text="agent.name"></h3>
@@ -266,8 +272,8 @@
       <!-- Chat Header -->
       <div class="px-5 py-3.5 border-b border-slate-800 bg-slate-900/90 backdrop-blur flex items-center justify-between shrink-0">
         <div class="flex items-center space-x-3">
-          <div class="w-9 h-9 rounded-xl bg-slate-800 border border-slate-700 flex items-center justify-center text-lg">
-            🤖
+          <div class="w-9 h-9 rounded-xl overflow-hidden ring-1 ring-slate-700 shrink-0 bg-slate-800 shadow-sm flex items-center justify-center">
+            <img src="/static/icon.png?v=2" alt="Beherit Agent" class="w-full h-full object-cover">
           </div>
           <div>
             <div class="flex items-center gap-2">
@@ -304,16 +310,16 @@
       <div class="flex-1 overflow-y-auto p-4 space-y-4 custom-scroll min-h-0" id="chat-messages-container">
         <template x-if="chatMessages.length === 0">
           <div class="h-full flex flex-col items-center justify-center text-center p-6 text-slate-500">
-            <div class="text-4xl mb-2">💬</div>
-            <p class="text-sm font-medium">Brak wiadomości w tej sesji.</p>
+            <img src="/static/icon.png?v=2" alt="Beherit" class="w-14 h-14 rounded-2xl object-cover ring-1 ring-slate-800 opacity-60 mb-3 shadow-lg">
+            <p class="text-sm font-medium text-slate-300">Brak wiadomości w tej sesji.</p>
             <p class="text-xs text-slate-400 max-w-sm mt-1">Napisz do agenta prompt lub użyj szybkich poleceń poniżej.</p>
           </div>
         </template>
 
         <template x-for="(msg, idx) in chatMessages" :key="idx">
           <div :class="msg.role === 'user' ? 'justify-end' : 'justify-start'" class="flex items-start gap-3">
-            <div x-show="msg.role !== 'user'" class="w-8 h-8 rounded-lg bg-slate-800 border border-slate-700 flex items-center justify-center text-sm shrink-0">
-              🤖
+            <div x-show="msg.role !== 'user'" class="w-8 h-8 rounded-lg overflow-hidden ring-1 ring-slate-700 shrink-0 bg-slate-800 shadow-sm flex items-center justify-center">
+              <img src="/static/icon.png?v=2" alt="Beherit Agent" class="w-full h-full object-cover">
             </div>
 
             <div :class="msg.role === 'user' ? 'bg-emerald-600 text-slate-950 font-medium' : 'bg-slate-800/80 text-slate-100 border border-slate-700/60'"
@@ -726,18 +732,76 @@
         <button @click="openAuthModal = false" class="text-slate-400 hover:text-slate-200">✕</button>
       </div>
 
-      <!-- Current Status Card -->
-      <div class="p-3.5 rounded-xl bg-slate-950 border border-slate-800 flex items-center justify-between">
-        <div>
-          <p class="text-xs text-slate-400">Stan uwierzytelnienia:</p>
-          <p class="text-sm font-bold" 
-             :class="authStatusDetails && authStatusDetails.authenticated ? 'text-emerald-400' : 'text-amber-400'"
-             x-text="authStatusDetails && authStatusDetails.authenticated ? 'Połączono z subskrypcją' : 'Wymaga zalogowania'"></p>
+      <!-- Provider Selector Tabs (BEH-030) -->
+      <div>
+        <label class="text-[11px] font-semibold text-slate-400 uppercase tracking-wider block mb-1.5">Wybierz dostawcę subskrypcji SDK:</label>
+        <div class="grid grid-cols-3 gap-1.5 p-1 bg-slate-950 rounded-xl border border-slate-800">
+          <button @click="selectedAuthProvider = 'antigravity'; activeOAuthFlow = null; authTestResult = null; haptic();"
+                  :class="selectedAuthProvider === 'antigravity' ? 'bg-slate-800 text-emerald-400 font-bold border border-emerald-500/30' : 'text-slate-400 hover:text-slate-200'"
+                  class="py-1.5 px-2 rounded-lg text-xs flex items-center justify-center gap-1.5 transition">
+            <span>🌐</span> <span class="truncate">Google</span>
+          </button>
+          <button @click="selectedAuthProvider = 'claude-code'; activeOAuthFlow = null; authTestResult = null; haptic();"
+                  :class="selectedAuthProvider === 'claude-code' ? 'bg-slate-800 text-amber-400 font-bold border border-amber-500/30' : 'text-slate-400 hover:text-slate-200'"
+                  class="py-1.5 px-2 rounded-lg text-xs flex items-center justify-center gap-1.5 transition">
+            <span>🧠</span> <span class="truncate">Claude</span>
+          </button>
+          <button @click="selectedAuthProvider = 'codex'; activeOAuthFlow = null; authTestResult = null; haptic();"
+                  :class="selectedAuthProvider === 'codex' ? 'bg-slate-800 text-cyan-400 font-bold border border-cyan-500/30' : 'text-slate-400 hover:text-slate-200'"
+                  class="py-1.5 px-2 rounded-lg text-xs flex items-center justify-center gap-1.5 transition">
+            <span>⚡</span> <span class="truncate">OpenAI</span>
+          </button>
         </div>
-        <div x-show="authStatusDetails && authStatusDetails.masked_token" class="text-right">
-          <p class="text-xs text-slate-400">Token profilu:</p>
-          <code class="text-xs text-slate-300 font-mono" x-text="authStatusDetails.masked_token"></code>
+      </div>
+
+      <!-- 1-Click Server Import Banner (BEH-032) -->
+      <template x-if="localCliDetected && localCliDetected[selectedAuthProvider] && localCliDetected[selectedAuthProvider].available">
+        <div class="p-3 bg-emerald-950/40 border border-emerald-500/40 rounded-xl flex items-center justify-between gap-3 text-xs">
+          <div>
+            <p class="font-bold text-emerald-300 flex items-center gap-1">
+              <span>⚡</span> Wykryto aktywną sesję na serwerze!
+            </p>
+            <p class="text-[11px] text-emerald-400/80" x-text="localCliDetected[selectedAuthProvider].description"></p>
+          </div>
+          <button @click="importLocalAuth(selectedAuthProvider)" 
+                  class="bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold px-3 py-1.5 rounded-lg text-xs shrink-0 transition shadow-sm">
+            Importuj 1-Krokiem
+          </button>
         </div>
+      </template>
+
+      <!-- Current Status Card & Auth Healthcheck (BEH-033) -->
+      <div class="p-3.5 rounded-xl bg-slate-950 border border-slate-800 space-y-2.5">
+        <div class="flex items-center justify-between">
+          <div>
+            <p class="text-xs text-slate-400">Stan uwierzytelnienia:</p>
+            <p class="text-sm font-bold" 
+               :class="authStatusDetails && authStatusDetails.authenticated ? 'text-emerald-400' : 'text-amber-400'"
+               x-text="authStatusDetails && authStatusDetails.authenticated ? 'Połączono z subskrypcją' : 'Wymaga zalogowania'"></p>
+          </div>
+          <div class="flex items-center gap-2">
+            <button x-show="authStatusDetails && authStatusDetails.authenticated" 
+                    @click="testAgentAuth()" 
+                    class="px-2.5 py-1 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white rounded-lg border border-slate-700 text-xs font-medium flex items-center gap-1 transition">
+              <span x-show="authTestResult && authTestResult.testing" class="animate-spin text-[10px]">🔄</span>
+              <span x-show="!(authTestResult && authTestResult.testing)">🔍</span>
+              Testuj połączenie
+            </button>
+            <div x-show="authStatusDetails && authStatusDetails.masked_token" class="text-right">
+              <p class="text-xs text-slate-400">Token:</p>
+              <code class="text-xs text-slate-300 font-mono" x-text="authStatusDetails.masked_token"></code>
+            </div>
+          </div>
+        </div>
+
+        <!-- Healthcheck Banner -->
+        <template x-if="authTestResult && !authTestResult.testing">
+          <div :class="authTestResult.valid ? 'bg-emerald-950/60 border-emerald-500/40 text-emerald-300' : 'bg-rose-950/60 border-rose-500/40 text-rose-300'"
+               class="p-2 rounded-lg border text-xs flex items-center gap-2">
+            <span x-text="authTestResult.valid ? '✅' : '❌'"></span>
+            <span x-text="authTestResult.valid ? authTestResult.message : authTestResult.error"></span>
+          </div>
+        </template>
       </div>
 
       <!-- Auth Method Selector Tabs -->
@@ -754,61 +818,110 @@
         </button>
       </div>
 
-      <!-- TAB 1: AUTOMATIC OAUTH / DEVICE CODE -->
+      <!-- TAB 1: AUTOMATIC OAUTH / DEVICE CODE (BEH-031) -->
       <div x-show="authTab === 'auto'" class="space-y-3 text-xs">
-        <p class="text-slate-300 leading-relaxed">
-          Kliknij poniżej, aby wygenerować sesję autoryzacyjną dla tego agenta. Otrzymasz link do zatwierdzenia w przeglądarce.
-        </p>
+        <!-- Antigravity / Google View -->
+        <div x-show="selectedAuthProvider === 'antigravity'" class="space-y-3">
+          <p class="text-slate-300 leading-relaxed">
+            Generuje sesję autoryzacyjną urządzenia (RFC 8628). Otrzymasz kod i link do zatwierdzenia na koncie Google.
+          </p>
 
-        <template x-if="!activeOAuthFlow">
-          <button @click="startOAuthFlow()" class="w-full bg-slate-800 hover:bg-slate-700 text-slate-100 font-bold py-2.5 rounded-xl border border-slate-700 transition flex items-center justify-center gap-2">
-            <span>🌐 Rozpocznij połączenie z Google Antigravity</span>
-          </button>
-        </template>
+          <template x-if="!activeOAuthFlow">
+            <button @click="startOAuthFlow()" class="w-full bg-slate-800 hover:bg-slate-700 text-slate-100 font-bold py-2.5 rounded-xl border border-slate-700 transition flex items-center justify-center gap-2">
+              <span>🌐 Rozpocznij połączenie z Google Antigravity</span>
+            </button>
+          </template>
 
-        <template x-if="activeOAuthFlow">
-          <div class="bg-slate-950 p-4 rounded-xl border border-emerald-500/30 space-y-3">
-            <p class="text-slate-200">1. Otwórz stronę autoryzacji urządzenia (RFC 8628):</p>
-            <div class="flex gap-2">
-              <a :href="activeOAuthFlow.verification_uri_complete || activeOAuthFlow.verification_url" target="_blank" class="flex-1 block text-emerald-400 font-mono text-xs underline break-all bg-slate-900 p-2.5 rounded-lg border border-slate-800 hover:border-emerald-500 transition" x-text="activeOAuthFlow.verification_uri || activeOAuthFlow.verification_url"></a>
-              <a :href="activeOAuthFlow.verification_uri_complete || activeOAuthFlow.verification_url" target="_blank" class="bg-emerald-600 hover:bg-emerald-500 text-slate-950 font-bold px-3 py-2 rounded-lg text-xs flex items-center gap-1 transition shrink-0">
-                <span>Otwórz</span> ↗
-              </a>
-            </div>
-            
-            <p class="text-slate-200">2. Wprowadź poniższy kod urządzenia (Device User Code):</p>
-            <div class="bg-slate-900 p-3 rounded-xl border border-slate-800 text-center flex items-center justify-center gap-3">
-              <strong class="text-lg text-emerald-400 font-mono tracking-widest" x-text="activeOAuthFlow.user_code"></strong>
-              <button @click="navigator.clipboard.writeText(activeOAuthFlow.user_code); showToast('Skopiowano kod!');" class="text-slate-400 hover:text-slate-200 text-xs px-2 py-1 bg-slate-800 rounded border border-slate-700">Kopiuj</button>
-            </div>
+          <template x-if="activeOAuthFlow">
+            <div class="bg-slate-950 p-4 rounded-xl border border-emerald-500/30 space-y-3">
+              <!-- Warning when not configured with Google Cloud OAuth keys -->
+              <div x-show="activeOAuthFlow.warning" class="p-2.5 bg-amber-950/40 border border-amber-500/40 rounded-lg text-amber-300 text-[11px] leading-relaxed flex flex-col gap-1.5">
+                <div class="flex items-start gap-1.5">
+                  <span>⚠️</span>
+                  <span x-text="activeOAuthFlow.warning"></span>
+                </div>
+                <div class="flex justify-end">
+                  <button @click="authTab = 'manual'; haptic();" class="text-amber-200 underline font-semibold hover:text-white">
+                    Przejdź do Ręcznego Wklejenia Tokena →
+                  </button>
+                </div>
+              </div>
 
-            <div class="flex gap-2 pt-1">
-              <button @click="pollDeviceAuth()" class="flex-1 bg-slate-800 hover:bg-slate-700 text-slate-200 font-semibold py-2 rounded-lg border border-slate-700 text-xs flex items-center justify-center gap-1.5 transition">
-                <span>🔄</span> Sprawdź status (RFC 8628 Poll)
-              </button>
-            </div>
-
-            <div class="pt-2 border-t border-slate-800/80">
-              <p class="text-[11px] text-slate-400 mb-1.5">Lub wklej kod autoryzacyjny ręcznie:</p>
+              <p class="text-slate-200 font-medium">1. Otwórz stronę autoryzacji urządzenia (RFC 8628):</p>
               <div class="flex gap-2">
-                <input type="text" x-model="authCodeInput" placeholder="Wklej kod autoryzacyjny / token..." class="flex-1 bg-slate-800 text-slate-100 px-3 py-2 rounded-lg border border-slate-700 outline-none font-mono text-xs">
-                <button @click="verifyOAuthCode()" class="bg-emerald-600 hover:bg-emerald-500 text-slate-950 font-bold px-4 py-2 rounded-lg text-xs transition">Zatwierdź</button>
+                <a :href="activeOAuthFlow.verification_uri_complete || activeOAuthFlow.verification_url" target="_blank" class="flex-1 block text-emerald-400 font-mono text-xs underline break-all bg-slate-900 p-2.5 rounded-lg border border-slate-800 hover:border-emerald-500 transition" x-text="activeOAuthFlow.verification_uri || activeOAuthFlow.verification_url"></a>
+                <a :href="activeOAuthFlow.verification_uri_complete || activeOAuthFlow.verification_url" target="_blank" class="bg-emerald-600 hover:bg-emerald-500 text-slate-950 font-bold px-3 py-2 rounded-lg text-xs flex items-center gap-1 transition shrink-0">
+                  <span>Otwórz</span> ↗
+                </a>
+              </div>
+              
+              <p class="text-slate-200 font-medium">2. Wprowadź poniższy kod urządzenia (Device User Code):</p>
+              <div class="bg-slate-900 p-3 rounded-xl border border-slate-800 text-center flex items-center justify-center gap-3">
+                <strong class="text-lg text-emerald-400 font-mono tracking-widest" x-text="activeOAuthFlow.user_code"></strong>
+                <button @click="navigator.clipboard.writeText(activeOAuthFlow.user_code); showToast('Skopiowano kod!');" class="text-slate-400 hover:text-slate-200 text-xs px-2 py-1 bg-slate-800 rounded border border-slate-700">Kopiuj</button>
+              </div>
+
+              <div class="flex gap-2 pt-1">
+                <button @click="pollDeviceAuth()" class="flex-1 bg-slate-800 hover:bg-slate-700 text-slate-200 font-semibold py-2 rounded-lg border border-slate-700 text-xs flex items-center justify-center gap-1.5 transition">
+                  <span>🔄</span> Sprawdź status (RFC 8628 Poll)
+                </button>
+              </div>
+
+              <div class="pt-2 border-t border-slate-800/80">
+                <p class="text-[11px] text-slate-400 mb-1.5">Lub wklej kod autoryzacyjny ręcznie:</p>
+                <div class="flex gap-2">
+                  <input type="text" x-model="authCodeInput" placeholder="Wklej kod autoryzacyjny / token..." class="flex-1 bg-slate-800 text-slate-100 px-3 py-2 rounded-lg border border-slate-700 outline-none font-mono text-xs">
+                  <button @click="verifyOAuthCode()" class="bg-emerald-600 hover:bg-emerald-500 text-slate-950 font-bold px-4 py-2 rounded-lg text-xs transition">Zatwierdź</button>
+                </div>
               </div>
             </div>
-          </div>
-        </template>
+          </template>
+        </div>
+
+        <!-- Claude Code & OpenAI View -->
+        <div x-show="selectedAuthProvider !== 'antigravity'" class="p-3.5 bg-slate-950 border border-slate-800 rounded-xl space-y-2.5">
+          <p class="text-slate-300 leading-relaxed">
+            Dostawca <strong class="text-slate-100" x-text="selectedAuthProvider === 'claude-code' ? 'Anthropic Claude Code' : 'OpenAI Codex'"></strong> nie udostępnia publicznego protokołu RFC 8628 Device Code dla subskrypcji użytkowników.
+          </p>
+          <p class="text-slate-400 text-[11px]">
+            Aby połączyć tego agenta bezpłatnie ze swoją istniejącą subskrypcją, skorzystaj z <strong>Importu sesji z serwera</strong> (powyżej) lub przejdź do zakładki <strong>Ręczne Wklejenie Tokena</strong>.
+          </p>
+          <button @click="authTab = 'manual'; haptic();" class="w-full bg-slate-800 hover:bg-slate-700 text-slate-200 font-semibold py-2 rounded-lg border border-slate-700 text-xs transition">
+            Otwórz Ręczne Wklejenie Tokena →
+          </button>
+        </div>
       </div>
 
-      <!-- TAB 2: MANUAL TOKEN PASTE -->
+      <!-- TAB 2: MANUAL TOKEN PASTE & GUIDES (BEH-034) -->
       <div x-show="authTab === 'manual'" class="space-y-3 text-xs">
+        <!-- Interactive Guide Box -->
+        <div class="p-3 bg-slate-950 border border-slate-800 rounded-xl space-y-1.5">
+          <p class="font-bold text-slate-200 flex items-center gap-1.5">
+            <span>💡</span> Gdzie znaleźć token dla <span class="text-emerald-400 uppercase tracking-wide" x-text="selectedAuthProvider"></span>:
+          </p>
+          <div x-show="selectedAuthProvider === 'antigravity'" class="text-slate-400 text-[11px] space-y-1">
+            <p>• <strong>Klucz API:</strong> Wygeneruj bezpłatny klucz w <a href="https://aistudio.google.com" target="_blank" class="text-emerald-400 underline">Google AI Studio</a>.</p>
+            <p>• <strong>Z sesji CLI:</strong> Odczytaj token z pliku <code>~/.gemini/antigravity-cli/.credentials.json</code>.</p>
+          </div>
+          <div x-show="selectedAuthProvider === 'claude-code'" class="text-slate-400 text-[11px] space-y-1">
+            <p>• <strong>Z sesji CLI (Rekomendowane):</strong> Użyj przycisku importu powyżej lub skopiuj <code>accessToken</code> z <code>~/.claude/.credentials.json</code>.</p>
+            <p>• <strong>Klucz API:</strong> Pobierz klucz z <a href="https://console.anthropic.com/settings/keys" target="_blank" class="text-amber-400 underline">Anthropic Console</a>.</p>
+          </div>
+          <div x-show="selectedAuthProvider === 'codex'" class="text-slate-400 text-[11px] space-y-1">
+            <p>• <strong>Klucz OpenAI:</strong> Pobierz klucz z <a href="https://platform.openai.com/api-keys" target="_blank" class="text-cyan-400 underline">platform.openai.com/api-keys</a>.</p>
+          </div>
+        </div>
+
         <p class="text-slate-300">
           Wklej token sesji subskrypcji SDK dla tego agenta. Zostanie on zapisany w odizolowanym pliku <code>.auth/session.json</code> z uprawnieniami <code>0600</code>.
         </p>
-        <textarea x-model="manualTokenInput" rows="3" placeholder="Wklej token sesji SDK..." class="w-full bg-slate-800 text-slate-100 p-3 rounded-xl border border-slate-700 font-mono text-xs outline-none focus:border-emerald-500"></textarea>
+        <textarea x-model="manualTokenInput" rows="3" placeholder="Wklej token sesji SDK lub klucz API..." class="w-full bg-slate-800 text-slate-100 p-3 rounded-xl border border-slate-700 font-mono text-xs outline-none focus:border-emerald-500"></textarea>
         
-        <button @click="saveManualToken()" class="w-full bg-emerald-600 hover:bg-emerald-500 text-slate-950 font-bold py-2.5 rounded-xl transition">
-          Zapisz Token dla Agenta
-        </button>
+        <div class="flex gap-2">
+          <button @click="saveManualToken()" class="flex-1 bg-emerald-600 hover:bg-emerald-500 text-slate-950 font-bold py-2.5 rounded-xl transition">
+            Zapisz Token dla Agenta
+          </button>
+        </div>
       </div>
 
       <!-- Disconnect Option -->
@@ -893,6 +1006,9 @@
         authTargetAgent: null,
         authStatusDetails: null,
         authTab: 'auto',
+        selectedAuthProvider: 'antigravity',
+        localCliDetected: { claude_code: { available: false }, antigravity: { available: false }, codex: { available: false } },
+        authTestResult: null,
         activeOAuthFlow: null,
         authCodeInput: '',
         manualTokenInput: '',
@@ -1522,11 +1638,63 @@
         async openAuthModalFor(agent) {
           this.haptic();
           this.authTargetAgent = agent;
+          this.selectedAuthProvider = agent.engine || 'antigravity';
           this.activeOAuthFlow = null;
           this.manualTokenInput = '';
           this.authCodeInput = '';
+          this.authTestResult = null;
           this.openAuthModal = true;
           await this.refreshAuthDetails();
+          await this.detectLocalAuth();
+        },
+
+        async detectLocalAuth() {
+          if (!this.authTargetAgent) return;
+          try {
+            const res = await this.apiFetch(`/api/agents/${this.authTargetAgent.slug}/auth/local-detect`);
+            if (res.ok) {
+              this.localCliDetected = await res.json();
+            }
+          } catch (e) {
+            console.error('Local detect failed:', e);
+          }
+        },
+
+        async importLocalAuth(provider) {
+          this.haptic();
+          if (!this.authTargetAgent) return;
+          try {
+            const res = await this.apiFetch(`/api/agents/${this.authTargetAgent.slug}/auth/import-local`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ provider: provider || this.selectedAuthProvider })
+            });
+            if (res.ok) {
+              this.showToast('Pomyślnie zaimportowano sesję z serwera!');
+              await this.refreshAuthDetails();
+              await this.loadAgents();
+              await this.testAgentAuth();
+            } else {
+              const err = await res.json();
+              alert(err.detail || 'Błąd importu sesji');
+            }
+          } catch (e) {
+            alert(`Błąd: ${e.message}`);
+          }
+        },
+
+        async testAgentAuth() {
+          this.haptic();
+          if (!this.authTargetAgent) return;
+          this.authTestResult = { testing: true };
+          try {
+            const res = await this.apiFetch(`/api/agents/${this.authTargetAgent.slug}/auth/test`, {
+              method: 'POST'
+            });
+            this.authTestResult = await res.json();
+          } catch (e) {
+            this.authTestResult = { valid: false, error: e.message };
+          }
         },
 
         async refreshAuthDetails() {
@@ -1546,7 +1714,7 @@
             const res = await this.apiFetch(`/api/agents/${this.authTargetAgent.slug}/auth/start`, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ provider: this.authTargetAgent.engine })
+              body: JSON.stringify({ provider: this.selectedAuthProvider })
             });
             this.activeOAuthFlow = await res.json();
           } catch (e) {
@@ -1569,6 +1737,7 @@
               await this.loadAgents();
               this.activeOAuthFlow = null;
               this.authCodeInput = '';
+              await this.testAgentAuth();
             } else {
               const err = await res.json();
               alert(err.detail || 'Błąd autoryzacji');
@@ -1594,6 +1763,7 @@
                 await this.refreshAuthDetails();
                 await this.loadAgents();
                 this.activeOAuthFlow = null;
+                await this.testAgentAuth();
                 return true;
               } else {
                 this.showToast(data.message || 'Oczekiwanie na zatwierdzenie w przeglądarce...');
@@ -1615,13 +1785,15 @@
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({
                 token: this.manualTokenInput,
-                provider: this.authTargetAgent.engine
+                provider: this.selectedAuthProvider
               })
             });
             if (res.ok) {
               await this.refreshAuthDetails();
               await this.loadAgents();
               this.manualTokenInput = '';
+              this.showToast('Zapisano token!');
+              await this.testAgentAuth();
             } else {
               const err = await res.json();
               alert(err.detail || 'Błąd zapisu tokena');
