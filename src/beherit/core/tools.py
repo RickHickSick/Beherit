@@ -3,9 +3,9 @@
 import asyncio
 import os
 import re
-import subprocess
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any
+
 from beherit.config import settings
 from beherit.models.agent import AgentModel, TerminalMode
 
@@ -13,7 +13,7 @@ from beherit.models.agent import AgentModel, TerminalMode
 class CapabilitiesGuard:
     """Enforces fine-grained permission controls based on agent capabilities."""
 
-    def __init__(self, default_workspace: Optional[Path] = None):
+    def __init__(self, default_workspace: Path | None = None):
         self.default_workspace = default_workspace or settings.agents_dir
 
     def get_agent_workspace(self, agent: AgentModel) -> Path:
@@ -27,7 +27,7 @@ class CapabilitiesGuard:
         agent: AgentModel,
         command: str,
         timeout: int = 60,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """
         Execute a bash command adhering to agent's terminal_mode:
         - DISABLED: denied immediately.
@@ -79,7 +79,7 @@ class CapabilitiesGuard:
                 if fcmd in command:
                     return {
                         "success": False,
-                        "error": f"Restricted mode: Dangerous command pattern rejected.",
+                        "error": "Restricted mode: Dangerous command pattern rejected.",
                         "mode": TerminalMode.RESTRICTED.value,
                     }
 
@@ -114,7 +114,7 @@ class CapabilitiesGuard:
                 "cwd": str(workspace),
             }
 
-        except asyncio.TimeoutError:
+        except TimeoutError:
             try:
                 process.kill()
             except ProcessLookupError:
@@ -131,7 +131,7 @@ class CapabilitiesGuard:
                 "mode": capabilities.terminal_mode.value,
             }
 
-    def read_file(self, agent: AgentModel, relative_or_abs_path: str) -> Dict[str, Any]:
+    def read_file(self, agent: AgentModel, relative_or_abs_path: str) -> dict[str, Any]:
         """Read a file adhering to read capabilities."""
         if not agent.capabilities.file_read:
             return {"success": False, "error": "File read capability is disabled."}
@@ -161,7 +161,7 @@ class CapabilitiesGuard:
         except Exception as e:
             return {"success": False, "error": str(e)}
 
-    def write_file(self, agent: AgentModel, relative_or_abs_path: str, content: str) -> Dict[str, Any]:
+    def write_file(self, agent: AgentModel, relative_or_abs_path: str, content: str) -> dict[str, Any]:
         """Write content to a file adhering to write capabilities."""
         if not agent.capabilities.file_write:
             return {"success": False, "error": "File write capability is disabled."}
@@ -189,7 +189,7 @@ class CapabilitiesGuard:
         except Exception as e:
             return {"success": False, "error": str(e)}
 
-    def list_dir(self, agent: AgentModel, relative_or_abs_path: str = ".") -> Dict[str, Any]:
+    def list_dir(self, agent: AgentModel, relative_or_abs_path: str = ".") -> dict[str, Any]:
         """List files and folders in directory adhering to read capabilities."""
         if not agent.capabilities.file_read:
             return {"success": False, "error": "File read capability is disabled."}
@@ -228,8 +228,8 @@ class CapabilitiesGuard:
         self,
         agent: AgentModel,
         tool_name: str,
-        args: Optional[Dict[str, Any]] = None,
-    ) -> Dict[str, Any]:
+        args: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
         """Unified dispatcher for agent tool calls."""
         args = args or {}
         if tool_name == "execute_bash":

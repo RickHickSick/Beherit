@@ -1,8 +1,10 @@
 """Tests for REST API endpoints and streaming chat guards."""
 
 from pathlib import Path
+
 from fastapi.testclient import TestClient
-from beherit.api.routes import repo, auth_mgr
+
+from beherit.api.routes import auth_mgr, repo
 from beherit.main import app
 
 client = TestClient(app)

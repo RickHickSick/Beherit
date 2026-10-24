@@ -4,14 +4,15 @@ import json
 import sqlite3
 import time
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any
+
 from beherit.config import settings
 
 
 class DatabaseManager:
     """Manages local SQLite database for background jobs, chat sessions, and audit trail."""
 
-    def __init__(self, db_path: Optional[Path] = None):
+    def __init__(self, db_path: Path | None = None):
         self.db_path = (db_path or settings.BEHERIT_DB_PATH).resolve()
         self._init_db()
 
@@ -65,13 +66,36 @@ class DatabaseManager:
                 );
                 """
             )
+            conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS knowledge_chunks (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    agent_slug TEXT NOT NULL,
+                    doc_name TEXT NOT NULL,
+                    chunk_index INTEGER NOT NULL,
+                    content TEXT NOT NULL,
+                    char_count INTEGER NOT NULL,
+                    updated_at REAL NOT NULL
+                );
+                """
+            )
+            conn.execute(
+                """
+                CREATE VIRTUAL TABLE IF NOT EXISTS knowledge_fts USING fts5(
+                    content,
+                    agent_slug UNINDEXED,
+                    doc_name UNINDEXED,
+                    chunk_id UNINDEXED
+                );
+                """
+            )
             conn.commit()
 
     def create_chat_session(
         self,
         agent_slug: str,
-        title: Optional[str] = None,
-        session_id: Optional[str] = None,
+        title: str | None = None,
+        session_id: str | None = None,
     ) -> str:
         """Create or initialize a chat session."""
         sid = session_id or f"sess_{agent_slug}_{int(time.time() * 1000)}"
@@ -89,7 +113,7 @@ class DatabaseManager:
             conn.commit()
         return sid
 
-    def get_agent_sessions(self, agent_slug: str, limit: int = 20) -> List[Dict[str, Any]]:
+    def get_agent_sessions(self, agent_slug: str, limit: int = 20) -> list[dict[str, Any]]:
         """Return recent chat sessions for an agent."""
         with self._get_connection() as conn:
             cursor = conn.execute(
@@ -104,7 +128,7 @@ class DatabaseManager:
             )
             return [dict(row) for row in cursor.fetchall()]
 
-    def get_session_messages(self, session_id: str, limit: int = 100) -> List[Dict[str, Any]]:
+    def get_session_messages(self, session_id: str, limit: int = 100) -> list[dict[str, Any]]:
         """Return ordered messages for a given session."""
         with self._get_connection() as conn:
             cursor = conn.execute(
@@ -136,7 +160,7 @@ class DatabaseManager:
         agent_slug: str,
         role: str,
         content: str,
-        thoughts: Optional[List[str]] = None,
+        thoughts: list[str] | None = None,
     ) -> int:
         """Add a single message to a chat session and touch session updated_at."""
         now = time.time()
@@ -170,6 +194,8 @@ class DatabaseManager:
             conn.execute("DELETE FROM chat_messages WHERE agent_slug = ?", (agent_slug,))
             conn.execute("DELETE FROM chat_sessions WHERE agent_slug = ?", (agent_slug,))
             conn.execute("DELETE FROM job_history WHERE agent_slug = ?", (agent_slug,))
+            conn.execute("DELETE FROM knowledge_chunks WHERE agent_slug = ?", (agent_slug,))
+            conn.execute("DELETE FROM knowledge_fts WHERE agent_slug = ?", (agent_slug,))
             conn.commit()
 
     def record_job(
@@ -177,9 +203,9 @@ class DatabaseManager:
         agent_slug: str,
         status: str,
         duration_seconds: float,
-        summary: Optional[str] = None,
-        error_message: Optional[str] = None,
-        report_path: Optional[str] = None,
+        summary: str | None = None,
+        error_message: str | None = None,
+        report_path: str | None = None,
     ) -> int:
         """Record a completed job execution."""
         executed_at = time.time()
@@ -202,7 +228,7 @@ class DatabaseManager:
             conn.commit()
             return cursor.lastrowid
 
-    def get_agent_history(self, agent_slug: str, limit: int = 50) -> List[Dict[str, Any]]:
+    def get_agent_history(self, agent_slug: str, limit: int = 50) -> list[dict[str, Any]]:
         """Return history for a specific agent."""
         with self._get_connection() as conn:
             cursor = conn.execute(
@@ -217,7 +243,7 @@ class DatabaseManager:
             )
             return [dict(row) for row in cursor.fetchall()]
 
-    def get_recent_history(self, limit: int = 50) -> List[Dict[str, Any]]:
+    def get_recent_history(self, limit: int = 50) -> list[dict[str, Any]]:
         """Return global recent history."""
         with self._get_connection() as conn:
             cursor = conn.execute(

@@ -2,7 +2,8 @@
 
 import datetime
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any
+
 import httpx
 
 from beherit.config import settings
@@ -13,7 +14,7 @@ from beherit.models.agent import AgentModel
 class ReportDispatcher:
     """Dispatches job outcomes to SQL, Markdown reports, and Telegram alerts."""
 
-    def __init__(self, db_manager: Optional[DatabaseManager] = None):
+    def __init__(self, db_manager: DatabaseManager | None = None):
         self.db = db_manager or DatabaseManager()
 
     async def dispatch(
@@ -22,11 +23,11 @@ class ReportDispatcher:
         status: str,
         duration_seconds: float,
         output_text: str,
-        error_message: Optional[str] = None,
-    ) -> Dict[str, Any]:
+        error_message: str | None = None,
+    ) -> dict[str, Any]:
         """Dispatch reporting according to agent.schedule.reporting settings."""
         reporting = agent.schedule.reporting
-        results: Dict[str, Any] = {
+        results: dict[str, Any] = {
             "sql_saved": False,
             "markdown_path": None,
             "telegram_sent": False,
@@ -103,7 +104,7 @@ class ReportDispatcher:
         agent_name: str,
         status: str,
         output_text: str,
-        error: Optional[str] = None,
+        error: str | None = None,
     ) -> None:
         """Send formatted message via Telegram Bot API."""
         url = f"https://api.telegram.org/bot{token}/sendMessage"

@@ -1,21 +1,21 @@
 from beherit.models.agent import (
-    AgentModel,
     AgentAuthConfig,
     AgentCapabilities,
+    AgentModel,
     AgentSchedule,
-    ScheduleReporting,
-    EngineType,
     AuthStatus,
+    EngineType,
+    ScheduleReporting,
     TerminalMode,
 )
 
 __all__ = [
-    "AgentModel",
     "AgentAuthConfig",
     "AgentCapabilities",
+    "AgentModel",
     "AgentSchedule",
-    "ScheduleReporting",
-    "EngineType",
     "AuthStatus",
+    "EngineType",
+    "ScheduleReporting",
     "TerminalMode",
 ]

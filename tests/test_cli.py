@@ -1,6 +1,7 @@
 """Tests for Beherit Command-Line Interface (CLI)."""
 
 import pytest
+
 from beherit.cli import main
 
 

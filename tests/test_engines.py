@@ -1,10 +1,12 @@
 """Tests for Engine Registry and SDK Engine Adapters (Claude Code & Codex)."""
 
-import pytest
 from pathlib import Path
+
+import pytest
+
 from beherit.core.auth_manager import AgentAuthManager
-from beherit.engines import EngineRegistry, AntigravityEngine, ClaudeCodeEngine, OpenAICodexEngine
-from beherit.models.agent import AgentModel, EngineType, AuthStatus
+from beherit.engines import AntigravityEngine, ClaudeCodeEngine, EngineRegistry, OpenAICodexEngine
+from beherit.models.agent import AgentModel, EngineType
 
 
 def test_engine_registry_resolution(tmp_path: Path):

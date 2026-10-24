@@ -1,17 +1,27 @@
-version: '3.8'
-
 services:
   beherit:
     build:
       context: .
       dockerfile: Dockerfile
+    image: beherit:latest
     container_name: beherit-app
     restart: unless-stopped
     ports:
-      - "${BEHERIT_PORT:-8650}:${BEHERIT_PORT:-8650}"
-    env_file:
-      - .env
-    volumes:
-      - ./data:/app/data
+      - "${BEHERIT_PORT:-8650}:8650"
     environment:
       - PYTHONUNBUFFERED=1
+      - BEHERIT_HOST=0.0.0.0
+      - BEHERIT_PORT=8650
+      - BEHERIT_DATA_DIR=/app/data
+      - BEHERIT_DB_PATH=/app/data/beherit.db
+      - BEHERIT_ACCESS_TOKEN=${BEHERIT_ACCESS_TOKEN:-}
+      - BEHERIT_SECRET_KEY=${BEHERIT_SECRET_KEY:-}
+      - BEHERIT_CORS_ORIGINS=*
+    volumes:
+      - ./data:/app/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8650/api/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s

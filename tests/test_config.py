@@ -1,6 +1,7 @@
 """Test configuration and zero-leak environment guarantees."""
 
 from pathlib import Path
+
 from beherit.config import Settings
 
 

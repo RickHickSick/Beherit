@@ -1,7 +1,7 @@
 """Application Configuration with strict environment decoupling (Zero-Leak Policy)."""
 
 from pathlib import Path
-from typing import List, Union
+
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -25,7 +25,7 @@ class Settings(BaseSettings):
         default="beherit-default-insecure-secret-key-please-change-in-production",
         description="Secret key for signing sessions and tokens",
     )
-    BEHERIT_ACCESS_TOKEN: Union[str, None] = Field(
+    BEHERIT_ACCESS_TOKEN: str | None = Field(
         default=None,
         description="Optional access PIN/token guarding the Web UI and API (status 401 if unauthorized)",
     )
@@ -35,7 +35,7 @@ class Settings(BaseSettings):
         default=Path("./data"),
         description="Base path for data storage (sqlite db, sessions)",
     )
-    BEHERIT_AGENTS_DIR: Union[Path, None] = Field(
+    BEHERIT_AGENTS_DIR: Path | None = Field(
         default=None,
         description="Custom path for agents (e.g. Obsidian vault folder). If not set, defaults to BEHERIT_DATA_DIR / 'agents'",
     )
@@ -45,23 +45,23 @@ class Settings(BaseSettings):
     )
 
     # CORS
-    BEHERIT_CORS_ORIGINS: List[str] = Field(
+    BEHERIT_CORS_ORIGINS: list[str] = Field(
         default=["*"],
         description="CORS allowed origins",
     )
 
     # Optional Database Connector
-    DATABASE_URL: Union[str, None] = Field(
+    DATABASE_URL: str | None = Field(
         default=None,
         description="Optional database URL for external database tools",
     )
 
     # Optional Telegram Reporting Alerts
-    TELEGRAM_BOT_TOKEN: Union[str, None] = Field(
+    TELEGRAM_BOT_TOKEN: str | None = Field(
         default=None,
         description="Optional Telegram bot token for job alerts",
     )
-    TELEGRAM_CHAT_ID: Union[str, None] = Field(
+    TELEGRAM_CHAT_ID: str | None = Field(
         default=None,
         description="Optional Telegram chat ID for job alerts",
     )

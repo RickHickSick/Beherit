@@ -3,6 +3,7 @@
 import hmac
 from contextlib import asynccontextmanager
 from pathlib import Path
+
 from fastapi import FastAPI, Request, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
@@ -10,11 +11,13 @@ from fastapi.staticfiles import StaticFiles
 
 from beherit import __version__
 from beherit.api.routes import (
-    router as agents_router,
+    auth_guard_router,
     history_router,
     reports_router,
-    auth_guard_router,
     scheduler,
+)
+from beherit.api.routes import (
+    router as agents_router,
 )
 from beherit.config import settings
 
@@ -43,7 +46,7 @@ async def auth_guard_middleware(request: Request, call_next):
 
     path = request.url.path
     if (
-        path in ("/", "/health", "/api/auth/status", "/api/auth/verify")
+        path in ("/", "/health", "/api/health", "/api/auth/status", "/api/auth/verify")
         or path.startswith("/static/")
         or not path.startswith("/api/")
         or request.method == "OPTIONS"
@@ -107,6 +110,7 @@ async def root_index():
 
 
 @app.get("/health")
+@app.get("/api/health")
 async def health_check():
     """Health check endpoint."""
     return {

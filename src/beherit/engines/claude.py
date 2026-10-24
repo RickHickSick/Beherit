@@ -1,10 +1,11 @@
 """Claude Code SDK Engine Adapter with Per-Agent Session Isolation."""
 
 import asyncio
-import os
 import shutil
+from collections.abc import AsyncIterator
 from pathlib import Path
-from typing import Any, AsyncIterator, Dict, List, Optional
+from typing import Any
+
 from beherit.core.auth_manager import AgentAuthManager
 from beherit.engines.base import BaseAgentEngine
 from beherit.models.agent import AgentModel, AuthStatus, EngineType
@@ -16,20 +17,36 @@ class ClaudeCodeEngine(BaseAgentEngine):
     Ensures per-agent session and configuration isolation via CLAUDE_CONFIG_DIR.
     """
 
-    def __init__(self, auth_manager: Optional[AgentAuthManager] = None):
+    def __init__(self, auth_manager: AgentAuthManager | None = None):
         self.auth_manager = auth_manager or AgentAuthManager()
         self.cli_binary = shutil.which("claude")
+        self._active_processes: dict[str, asyncio.subprocess.Process] = {}
+
+    async def cancel_turn(self, agent_slug: str) -> bool:
+        """Terminate active subprocess for this agent if running."""
+        proc = self._active_processes.get(agent_slug)
+        if proc and proc.returncode is None:
+            try:
+                proc.terminate()
+                return True
+            except Exception:
+                try:
+                    proc.kill()
+                    return True
+                except Exception:
+                    pass
+        return False
 
     async def get_auth_status(self, agent_slug: str) -> AuthStatus:
         """Return authentication status for this agent's Claude profile."""
         details = self.auth_manager.get_auth_details(agent_slug)
         return details["status"]
 
-    async def start_auth_flow(self, agent_slug: str) -> Dict[str, Any]:
+    async def start_auth_flow(self, agent_slug: str) -> dict[str, Any]:
         """Start device flow for Claude."""
         return self.auth_manager.start_oauth_flow(agent_slug, provider=EngineType.CLAUDE_CODE)
 
-    async def complete_auth_flow(self, agent_slug: str, auth_payload: Dict[str, Any]) -> bool:
+    async def complete_auth_flow(self, agent_slug: str, auth_payload: dict[str, Any]) -> bool:
         """Save manual token or verify OAuth code."""
         method = auth_payload.get("method", "manual")
         if method == "manual":
@@ -55,8 +72,8 @@ class ClaudeCodeEngine(BaseAgentEngine):
         self,
         agent: AgentModel,
         message: str,
-        history: Optional[List[Dict[str, str]]] = None,
-    ) -> AsyncIterator[Dict[str, Any]]:
+        history: list[dict[str, str]] | None = None,
+    ) -> AsyncIterator[dict[str, Any]]:
         """Stream chat execution via Claude Code CLI or isolated runner."""
         if not self.auth_manager.is_authenticated(agent.slug):
             yield {
@@ -72,8 +89,8 @@ class ClaudeCodeEngine(BaseAgentEngine):
         auth_dir = self.auth_manager.get_agent_auth_dir(agent.slug)
         env["CLAUDE_CONFIG_DIR"] = str(auth_dir)
 
-        # Build full prompt
-        full_system_context = self.build_system_context(agent)
+        # Build full prompt with RAG
+        full_system_context = self.build_system_context(agent, query=message)
 
         prompt_parts = []
         if full_system_context:
@@ -84,7 +101,7 @@ class ClaudeCodeEngine(BaseAgentEngine):
                 f"{'User' if h.get('role') == 'user' else agent.name}: {h.get('content', '')}"
                 for h in history
             ]
-            prompt_parts.append(f"[CONVERSATION HISTORY]\n" + "\n".join(history_lines))
+            prompt_parts.append("[CONVERSATION HISTORY]\n" + "\n".join(history_lines))
 
         prompt_parts.append(f"[USER]\n{message}")
         full_prompt = "\n\n".join(prompt_parts)
@@ -113,6 +130,7 @@ class ClaudeCodeEngine(BaseAgentEngine):
                     cwd=str(workspace_dir),
                     env=env,
                 )
+                self._active_processes[agent.slug] = process
 
                 assert process.stdout is not None
                 while True:
@@ -127,6 +145,7 @@ class ClaudeCodeEngine(BaseAgentEngine):
             except Exception as e:
                 yield {"event": "error", "data": {"error": str(e)}}
             finally:
+                self._active_processes.pop(agent.slug, None)
                 if process is not None and process.returncode is None:
                     try:
                         process.terminate()

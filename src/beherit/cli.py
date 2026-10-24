@@ -3,6 +3,7 @@
 import argparse
 import asyncio
 import sys
+
 from beherit import __version__
 from beherit.config import settings
 from beherit.core.repository import AgentRepository
@@ -80,6 +81,14 @@ def cmd_health(args: argparse.Namespace) -> None:
     print(f"Telegram Alerts: {'Enabled' if settings.TELEGRAM_BOT_TOKEN else 'Disabled'}")
 
 
+def cmd_mcp(args: argparse.Namespace) -> None:
+    """Run Beherit MCP server over Stdio for a specific agent."""
+    from beherit.mcp.server import MCPServer
+
+    server = MCPServer(agent_slug=args.agent_slug)
+    server.run()
+
+
 def main() -> None:
     """CLI Entrypoint parser."""
     parser = argparse.ArgumentParser(
@@ -109,6 +118,11 @@ def main() -> None:
     # health command
     health_parser = subparsers.add_parser("health", help="Check runtime environment and configuration")
     health_parser.set_defaults(func=cmd_health)
+
+    # mcp command
+    mcp_parser = subparsers.add_parser("mcp", help="Run Beherit MCP server over Stdio for an agent")
+    mcp_parser.add_argument("--agent-slug", type=str, required=True, help="Slug of the agent")
+    mcp_parser.set_defaults(func=cmd_mcp)
 
     args = parser.parse_args()
 

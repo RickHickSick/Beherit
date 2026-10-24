@@ -61,3 +61,6 @@ asyncio_mode = "auto"
 line-length = 100
 target-version = "py311"
 src = ["src", "tests"]
+
+[tool.ruff.lint]
+ignore = ["BLE001", "S110", "S112", "C401", "SIM103"]

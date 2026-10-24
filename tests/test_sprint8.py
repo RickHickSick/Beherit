@@ -2,13 +2,13 @@
 
 import json
 from pathlib import Path
+
 from fastapi.testclient import TestClient
 
-from beherit.api.routes import repo, auth_mgr
+from beherit.api.routes import auth_mgr, repo
 from beherit.config import settings
 from beherit.engines.base import BaseAgentEngine
 from beherit.main import app
-from beherit.models.agent import MCPServerConfig
 
 client = TestClient(app)
 

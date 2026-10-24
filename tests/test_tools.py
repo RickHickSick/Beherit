@@ -1,9 +1,11 @@
 """Tests for Agent Tool Execution and Capabilities Guard."""
 
-import pytest
 from pathlib import Path
+
+import pytest
+
 from beherit.core.tools import CapabilitiesGuard
-from beherit.models.agent import AgentModel, AgentCapabilities, TerminalMode
+from beherit.models.agent import AgentCapabilities, AgentModel, TerminalMode
 
 
 @pytest.mark.asyncio

@@ -2,10 +2,11 @@
 
 import asyncio
 import json
-import os
 import shutil
+from collections.abc import AsyncIterator
 from pathlib import Path
-from typing import Any, AsyncIterator, Dict, List, Optional
+from typing import Any
+
 from beherit.core.auth_manager import AgentAuthManager
 from beherit.engines.base import BaseAgentEngine
 from beherit.models.agent import AgentModel, AuthStatus, EngineType
@@ -17,20 +18,36 @@ class AntigravityEngine(BaseAgentEngine):
     Guarantees that each agent runs in an isolated environment with dedicated credentials.
     """
 
-    def __init__(self, auth_manager: Optional[AgentAuthManager] = None):
+    def __init__(self, auth_manager: AgentAuthManager | None = None):
         self.auth_manager = auth_manager or AgentAuthManager()
         self.cli_binary = shutil.which("agy")
+        self._active_processes: dict[str, asyncio.subprocess.Process] = {}
+
+    async def cancel_turn(self, agent_slug: str) -> bool:
+        """Terminate active subprocess for this agent if running."""
+        proc = self._active_processes.get(agent_slug)
+        if proc and proc.returncode is None:
+            try:
+                proc.terminate()
+                return True
+            except Exception:
+                try:
+                    proc.kill()
+                    return True
+                except Exception:
+                    pass
+        return False
 
     async def get_auth_status(self, agent_slug: str) -> AuthStatus:
         """Return the current authentication state for this agent's Antigravity profile."""
         details = self.auth_manager.get_auth_details(agent_slug)
         return details["status"]
 
-    async def start_auth_flow(self, agent_slug: str) -> Dict[str, Any]:
+    async def start_auth_flow(self, agent_slug: str) -> dict[str, Any]:
         """Start the automated device code / OAuth handshake for this agent."""
         return self.auth_manager.start_oauth_flow(agent_slug, provider=EngineType.ANTIGRAVITY)
 
-    async def complete_auth_flow(self, agent_slug: str, auth_payload: Dict[str, Any]) -> bool:
+    async def complete_auth_flow(self, agent_slug: str, auth_payload: dict[str, Any]) -> bool:
         """Complete authentication (supports either OAuth flow verification or manual token)."""
         method = auth_payload.get("method", "manual")
         if method == "manual":
@@ -56,8 +73,8 @@ class AntigravityEngine(BaseAgentEngine):
         self,
         agent: AgentModel,
         message: str,
-        history: Optional[List[Dict[str, str]]] = None,
-    ) -> AsyncIterator[Dict[str, Any]]:
+        history: list[dict[str, str]] | None = None,
+    ) -> AsyncIterator[dict[str, Any]]:
         """
         Execute an agent turn in an isolated subprocess with the agent's credentials.
         Yields structured SSE event dictionaries (thought, token, tool_call, done).
@@ -76,8 +93,8 @@ class AntigravityEngine(BaseAgentEngine):
         # Prepare isolated environment
         env = self.auth_manager.get_sdk_environment(agent.slug)
 
-        # Build prompt incorporating Master Prompt, Instructions, Knowledge Base & MCP
-        full_system_context = self.build_system_context(agent)
+        # Build prompt incorporating Master Prompt, Instructions, Knowledge Base (RAG) & MCP
+        full_system_context = self.build_system_context(agent, query=message)
 
         # Combine system role context, conversation history, and user message
         prompt_parts = []
@@ -89,7 +106,7 @@ class AntigravityEngine(BaseAgentEngine):
             for h in history:
                 role_label = "User" if h.get("role") == "user" else agent.name
                 history_lines.append(f"{role_label}: {h.get('content', '')}")
-            prompt_parts.append(f"[CONVERSATION HISTORY]\n" + "\n".join(history_lines) + "\n[END CONVERSATION HISTORY]")
+            prompt_parts.append("[CONVERSATION HISTORY]\n" + "\n".join(history_lines) + "\n[END CONVERSATION HISTORY]")
 
         prompt_parts.append(f"[CURRENT USER REQUEST]\n{message}")
         full_turn_prompt = "\n\n".join(prompt_parts)
@@ -124,6 +141,7 @@ class AntigravityEngine(BaseAgentEngine):
                     cwd=str(workspace_dir),
                     env=env,
                 )
+                self._active_processes[agent.slug] = process
 
                 assert process.stdout is not None
                 while True:
@@ -166,6 +184,7 @@ class AntigravityEngine(BaseAgentEngine):
             except Exception as e:
                 yield {"event": "error", "data": {"error": str(e)}}
             finally:
+                self._active_processes.pop(agent.slug, None)
                 if process is not None and process.returncode is None:
                     try:
                         process.terminate()

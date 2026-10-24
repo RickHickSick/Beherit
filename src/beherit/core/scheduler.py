@@ -1,8 +1,8 @@
 """Autonomous Task Scheduler with APScheduler and Multi-Channel Dispatch."""
 
-import asyncio
 import time
-from typing import Any, Dict, List, Optional
+from typing import Any
+
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
 
@@ -18,9 +18,9 @@ class AgentScheduler:
 
     def __init__(
         self,
-        repository: Optional[AgentRepository] = None,
-        db_manager: Optional[DatabaseManager] = None,
-        engine_registry: Optional[EngineRegistry] = None,
+        repository: AgentRepository | None = None,
+        db_manager: DatabaseManager | None = None,
+        engine_registry: EngineRegistry | None = None,
     ):
         self.repo = repository or AgentRepository()
         self.db = db_manager or DatabaseManager()
@@ -69,7 +69,7 @@ class AgentScheduler:
         except Exception:
             return False
 
-    async def execute_agent_job(self, agent_slug: str) -> Dict[str, Any]:
+    async def execute_agent_job(self, agent_slug: str) -> dict[str, Any]:
         """Execute a scheduled autonomous turn for an agent."""
         agent = self.repo.load_agent(agent_slug)
         if not agent:
@@ -78,8 +78,8 @@ class AgentScheduler:
         start_time = time.time()
         prompt = agent.schedule.prompt or "Wykonaj zaplanowany audyt i wygeneruj raport ze swoich zadań."
 
-        output_tokens: List[str] = []
-        error_msg: Optional[str] = None
+        output_tokens: list[str] = []
+        error_msg: str | None = None
         status = "success"
 
         engine = self.engine_registry.get_engine(agent.engine)

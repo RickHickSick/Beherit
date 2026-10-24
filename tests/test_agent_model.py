@@ -1,11 +1,12 @@
 """Test Agent Model, Repository and Auth Isolation."""
 
-import pytest
-import shutil
 from pathlib import Path
+
+import pytest
+
 from beherit.core.auth_manager import AgentAuthManager
 from beherit.core.repository import AgentRepository
-from beherit.models.agent import AgentModel, EngineType, AuthStatus
+from beherit.models.agent import AgentModel, AuthStatus, EngineType
 
 
 def test_template_agent_loading():

@@ -1,6 +1,7 @@
 """Tests for Per-Agent SDK Authentication Isolation (Manual & OAuth flows)."""
 
 from pathlib import Path
+
 from beherit.core.auth_manager import AgentAuthManager
 from beherit.models.agent import AuthStatus, EngineType
 

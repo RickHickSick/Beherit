@@ -1,9 +1,11 @@
 """REST API Routes for Agent CRUD, Per-Agent Auth, and Streaming Chat."""
 
+import asyncio
 import hmac
 import json
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any
+
 from fastapi import APIRouter, HTTPException, status
 from pydantic import BaseModel, Field
 from sse_starlette.sse import EventSourceResponse
@@ -16,10 +18,10 @@ from beherit.core.scheduler import AgentScheduler
 from beherit.core.tools import CapabilitiesGuard
 from beherit.engines import EngineRegistry
 from beherit.models.agent import (
-    AgentModel,
-    EngineType,
     AgentCapabilities,
+    AgentModel,
     AgentSchedule,
+    EngineType,
     MCPServerConfig,
 )
 
@@ -33,6 +35,7 @@ auth_mgr = AgentAuthManager()
 db_mgr = DatabaseManager()
 engine_registry = EngineRegistry(auth_manager=auth_mgr)
 scheduler = AgentScheduler(repository=repo, db_manager=db_mgr, engine_registry=engine_registry)
+active_chat_tasks: dict[str, asyncio.Task] = {}
 
 
 # Request schemas
@@ -43,31 +46,36 @@ class CreateAgentRequest(BaseModel):
     engine: EngineType = Field(default=EngineType.ANTIGRAVITY)
     model: str = Field(default="gemini-3.8-flash")
     master_prompt: str = Field(default="You are an autonomous AI assistant.")
-    instructions: Optional[str] = Field(default="")
-    capabilities: Optional[AgentCapabilities] = None
-    schedule: Optional[AgentSchedule] = None
-    mcp_servers: Optional[Dict[str, MCPServerConfig]] = None
-    custom_target_dir: Optional[str] = Field(
+    instructions: str | None = Field(default="")
+    capabilities: AgentCapabilities | None = None
+    schedule: AgentSchedule | None = None
+    mcp_servers: dict[str, MCPServerConfig] | None = None
+    custom_target_dir: str | None = Field(
         default=None,
         description="Optional custom path (e.g. specific Obsidian folder) to save this agent",
     )
 
 
 class UpdateAgentRequest(BaseModel):
-    name: Optional[str] = None
-    description: Optional[str] = None
-    engine: Optional[EngineType] = None
-    model: Optional[str] = None
-    master_prompt: Optional[str] = None
-    instructions: Optional[str] = None
-    capabilities: Optional[AgentCapabilities] = None
-    schedule: Optional[AgentSchedule] = None
-    mcp_servers: Optional[Dict[str, MCPServerConfig]] = None
+    name: str | None = None
+    description: str | None = None
+    engine: EngineType | None = None
+    model: str | None = None
+    master_prompt: str | None = None
+    instructions: str | None = None
+    capabilities: AgentCapabilities | None = None
+    schedule: AgentSchedule | None = None
+    mcp_servers: dict[str, MCPServerConfig] | None = None
 
 
 class SaveKnowledgeRequest(BaseModel):
     filename: str = Field(..., min_length=1, max_length=100)
     content: str = Field(default="")
+
+
+class KnowledgeSearchRequest(BaseModel):
+    query: str = Field(..., min_length=1, max_length=500)
+    top_k: int = Field(default=5, ge=1, le=20)
 
 
 class VerifyTokenRequest(BaseModel):
@@ -88,25 +96,29 @@ class OAuthVerifyRequest(BaseModel):
     auth_code: str = Field(..., min_length=1)
 
 
+class DevicePollRequest(BaseModel):
+    flow_id: str = Field(..., min_length=1)
+
+
 class ChatMessageRequest(BaseModel):
     message: str = Field(..., min_length=1)
-    session_id: Optional[str] = Field(default=None, description="Optional ID of active chat session")
-    history: Optional[List[Dict[str, str]]] = Field(default_factory=list)
+    session_id: str | None = Field(default=None, description="Optional ID of active chat session")
+    history: list[dict[str, str]] | None = Field(default_factory=list)
 
 
 class CreateChatSessionRequest(BaseModel):
-    title: Optional[str] = Field(default=None, description="Optional chat session title")
+    title: str | None = Field(default=None, description="Optional chat session title")
 
 
 class ExecuteToolRequest(BaseModel):
     tool: str = Field(..., description="Tool name: execute_bash, read_file, write_file, list_dir")
-    args: Dict[str, Any] = Field(default_factory=dict)
+    args: dict[str, Any] = Field(default_factory=dict)
 
 
 # --- Agent CRUD Endpoints ---
 
 
-@router.get("", response_model=Dict[str, List[Dict[str, Any]]])
+@router.get("", response_model=dict[str, list[dict[str, Any]]])
 async def list_agents():
     """List all agents registered in the storage directory."""
     agents = repo.list_agents()
@@ -256,6 +268,32 @@ async def verify_oauth_code(slug: str, payload: OAuthVerifyRequest):
             auth_code=payload.auth_code,
         )
         return {"status": "success", "auth": details}
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+
+@router.post("/{slug}/auth/device-poll")
+async def poll_device_auth(slug: str, payload: DevicePollRequest):
+    """Poll RFC 8628 device authorization status."""
+    agent = repo.load_agent(slug)
+    if not agent:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Agent not found.")
+    try:
+        result = auth_mgr.poll_device_token(slug, payload.flow_id)
+        return result
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+
+@router.post("/{slug}/auth/refresh")
+async def refresh_agent_token(slug: str):
+    """Refresh active access token using refresh_token."""
+    agent = repo.load_agent(slug)
+    if not agent:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Agent not found.")
+    try:
+        result = auth_mgr.refresh_access_token(slug)
+        return result
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
@@ -436,6 +474,30 @@ async def delete_agent_knowledge_file(slug: str, filename: str):
     return {"status": "deleted", "filename": safe_filename}
 
 
+@router.post("/{slug}/knowledge/search")
+async def search_agent_knowledge(slug: str, payload: KnowledgeSearchRequest):
+    """Semantic Local RAG search over the agent's knowledge documents."""
+    agent = repo.load_agent(slug)
+    if not agent:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Agent not found.")
+
+    from beherit.core.rag import KnowledgeRAG
+
+    rag = KnowledgeRAG(db_manager=db_mgr)
+    agent_dir = Path(agent.file_path).parent if agent.file_path else (repo.base_dir / slug)
+    knowledge_dir = agent_dir / "knowledge"
+    if knowledge_dir.exists():
+        rag.sync_agent_knowledge(slug, knowledge_dir)
+
+    results = rag.search(slug, query=payload.query, top_k=payload.top_k)
+    return {
+        "slug": slug,
+        "query": payload.query,
+        "results_count": len(results),
+        "results": results,
+    }
+
+
 # --- Chat Sessions & Persistence Endpoints ---
 
 
@@ -526,33 +588,77 @@ async def stream_agent_chat(slug: str, payload: ChatMessageRequest):
             "data": json.dumps({"session_id": session_id}),
         }
 
-        assistant_tokens: List[str] = []
-        assistant_thoughts: List[str] = []
+        assistant_tokens: list[str] = []
+        assistant_thoughts: list[str] = []
+
+        curr_task = asyncio.current_task()
+        if curr_task:
+            active_chat_tasks[slug] = curr_task
 
         engine = engine_registry.get_engine(agent.engine)
-        async for chunk in engine.stream_chat(agent, payload.message, history):
-            event = chunk.get("event", "message")
-            data = chunk.get("data", "")
+        try:
+            async for chunk in engine.stream_chat(agent, payload.message, history):
+                event = chunk.get("event", "message")
+                data = chunk.get("data", "")
 
-            if event == "token":
-                assistant_tokens.append(data if isinstance(data, str) else str(data))
-            elif event == "thought":
-                assistant_thoughts.append(data if isinstance(data, str) else str(data))
+                if event == "token":
+                    assistant_tokens.append(data if isinstance(data, str) else str(data))
+                elif event == "thought":
+                    assistant_thoughts.append(data if isinstance(data, str) else str(data))
 
-            yield {
-                "event": event,
-                "data": json.dumps(data),
-            }
+                yield {
+                    "event": event,
+                    "data": json.dumps(data),
+                }
 
-        # Persist complete assistant answer and thoughts to DB
-        full_reply = "".join(assistant_tokens).strip()
-        if full_reply:
-            db_mgr.add_chat_message(
-                session_id=session_id,
-                agent_slug=slug,
-                role="assistant",
-                content=full_reply,
-                thoughts=assistant_thoughts if assistant_thoughts else None,
-            )
+            # Persist complete assistant answer and thoughts to DB
+            full_reply = "".join(assistant_tokens).strip()
+            if full_reply:
+                db_mgr.add_chat_message(
+                    session_id=session_id,
+                    agent_slug=slug,
+                    role="assistant",
+                    content=full_reply,
+                    thoughts=assistant_thoughts if assistant_thoughts else None,
+                )
+        except asyncio.CancelledError:
+            full_reply = "".join(assistant_tokens).strip()
+            if full_reply:
+                db_mgr.add_chat_message(
+                    session_id=session_id,
+                    agent_slug=slug,
+                    role="assistant",
+                    content=full_reply + "\n\n*(Generowanie przerwane przez użytkownika)*",
+                    thoughts=assistant_thoughts if assistant_thoughts else None,
+                )
+            raise
+        finally:
+            if slug in active_chat_tasks and active_chat_tasks[slug] == curr_task:
+                active_chat_tasks.pop(slug, None)
 
     return EventSourceResponse(event_generator())
+
+
+@router.post("/{slug}/chat/cancel")
+async def cancel_agent_chat(slug: str):
+    """Cancel currently running chat generation for this agent."""
+    agent = repo.load_agent(slug)
+    if not agent:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Agent not found.")
+
+    engine = engine_registry.get_engine(agent.engine)
+    proc_terminated = await engine.cancel_turn(slug)
+
+    task_cancelled = False
+    task = active_chat_tasks.get(slug)
+    if task and not task.done():
+        task.cancel()
+        task_cancelled = True
+
+    return {
+        "status": "cancelled",
+        "slug": slug,
+        "process_terminated": proc_terminated,
+        "task_cancelled": task_cancelled,
+    }
+

@@ -1,12 +1,13 @@
 """Markdown-First Agent Repository: Parser, Serializer, and Storage with Error Recovery."""
 
 from pathlib import Path
-from typing import List, Optional
+
 import frontmatter
 from pydantic import ValidationError
+
 from beherit.config import settings
 from beherit.core.auth_manager import AgentAuthManager
-from beherit.models.agent import AgentModel, AgentAuthConfig, AuthStatus
+from beherit.models.agent import AgentAuthConfig, AgentModel
 
 
 class AgentRepository:
@@ -15,11 +16,11 @@ class AgentRepository:
     Tolerates syntax errors in manually edited files (in Obsidian/VS Code) without crashing.
     """
 
-    def __init__(self, base_dir: Optional[Path] = None):
+    def __init__(self, base_dir: Path | None = None):
         self.base_dir = (base_dir or settings.agents_dir).resolve()
         self.auth_manager = AgentAuthManager(self.base_dir)
 
-    def list_agents(self) -> List[AgentModel]:
+    def list_agents(self) -> list[AgentModel]:
         """Discover and load all valid or degraded agents found in the storage directory."""
         if not self.base_dir.exists():
             return []
@@ -32,7 +33,7 @@ class AgentRepository:
                     agents.append(agent)
         return agents
 
-    def load_agent(self, slug: str) -> Optional[AgentModel]:
+    def load_agent(self, slug: str) -> AgentModel | None:
         """Load an agent by its directory slug with fault-tolerant error recovery."""
         agent_dir = self.base_dir / slug
         agent_file = agent_dir / "agent.md"
@@ -99,7 +100,7 @@ class AgentRepository:
                 auth=AgentAuthConfig(status=auth_details["status"]),
             )
 
-    def save_agent(self, agent: AgentModel, target_dir: Optional[Path] = None) -> Path:
+    def save_agent(self, agent: AgentModel, target_dir: Path | None = None) -> Path:
         """
         Serialize AgentModel into agent.md and instructions.md.
         Allows specifying an optional target directory (e.g. custom user vault).
@@ -125,16 +126,26 @@ class AgentRepository:
             instructions_file = agent_dir / "instructions.md"
             instructions_file.write_text(agent.instructions, encoding="utf-8")
 
-        # Sync mcp.json for CLI engines if mcp_servers defined
+        # Sync mcp.json for CLI engines: include user-defined mcp_servers + built-in beherit-sandbox
+        import json
+        import sys
+
+        mcp_servers_dict = {}
         if agent.mcp_servers:
-            import json
-            mcp_data = {
-                "mcpServers": {
-                    name: server.model_dump(mode="json")
-                    for name, server in agent.mcp_servers.items()
-                }
+            for name, server in agent.mcp_servers.items():
+                mcp_servers_dict[name] = server.model_dump(mode="json")
+
+        # Automatically inject Beherit CapabilitiesGuard MCP server
+        mcp_servers_dict["beherit-sandbox"] = {
+            "command": sys.executable,
+            "args": ["-m", "beherit.cli", "mcp", "--agent-slug", agent.slug],
+            "env": {
+                "BEHERIT_AGENT_SLUG": agent.slug
             }
-            (agent_dir / "mcp.json").write_text(json.dumps(mcp_data, indent=2), encoding="utf-8")
+        }
+
+        mcp_data = {"mcpServers": mcp_servers_dict}
+        (agent_dir / "mcp.json").write_text(json.dumps(mcp_data, indent=2), encoding="utf-8")
 
         return agent_dir
 

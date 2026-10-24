@@ -2,8 +2,8 @@
 
 from datetime import date
 from enum import Enum
-from typing import Dict, List, Optional
-from pydantic import BaseModel, Field, ConfigDict
+
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class EngineType(str, Enum):
@@ -15,8 +15,8 @@ class EngineType(str, Enum):
 class MCPServerConfig(BaseModel):
     """External Model Context Protocol (MCP) server configuration."""
     command: str = Field(..., description="Executable command e.g. npx, python, or binary path")
-    args: List[str] = Field(default_factory=list, description="Arguments passed to MCP server")
-    env: Dict[str, str] = Field(default_factory=dict, description="Environment variables for the server")
+    args: list[str] = Field(default_factory=list, description="Arguments passed to MCP server")
+    env: dict[str, str] = Field(default_factory=dict, description="Environment variables for the server")
 
 
 class AuthStatus(str, Enum):
@@ -29,10 +29,10 @@ class AgentAuthConfig(BaseModel):
     """Isolated authentication configuration per agent."""
     provider: EngineType = Field(default=EngineType.ANTIGRAVITY)
     status: AuthStatus = Field(default=AuthStatus.UNAUTHENTICATED)
-    profile_id: Optional[str] = Field(default=None)
-    auth_method: Optional[str] = Field(default="manual")
-    masked_token: Optional[str] = Field(default=None)
-    expires_at: Optional[float] = Field(default=None)
+    profile_id: str | None = Field(default=None)
+    auth_method: str | None = Field(default="manual")
+    masked_token: str | None = Field(default=None)
+    expires_at: float | None = Field(default=None)
 
 
 class TerminalMode(str, Enum):
@@ -64,8 +64,8 @@ class ScheduleReporting(BaseModel):
 class AgentSchedule(BaseModel):
     """Autonomous background execution schedule."""
     enabled: bool = Field(default=False)
-    cron: Optional[str] = Field(default="0 8 * * *")
-    prompt: Optional[str] = Field(default=None, description="Optional custom prompt for scheduled turn")
+    cron: str | None = Field(default="0 8 * * *")
+    prompt: str | None = Field(default=None, description="Optional custom prompt for scheduled turn")
     reporting: ScheduleReporting = Field(default_factory=ScheduleReporting)
 
 
@@ -83,13 +83,13 @@ class AgentModel(BaseModel):
     capabilities: AgentCapabilities = Field(default_factory=AgentCapabilities)
     schedule: AgentSchedule = Field(default_factory=AgentSchedule)
     master_prompt: str = Field(default="")
-    instructions: Optional[str] = Field(default=None)
-    mcp_servers: Dict[str, MCPServerConfig] = Field(
+    instructions: str | None = Field(default=None)
+    mcp_servers: dict[str, MCPServerConfig] = Field(
         default_factory=dict,
         description="Dictionary of external MCP servers configured for this agent",
     )
     
     # Metadata fields for runtime observation
-    file_path: Optional[str] = Field(default=None, description="Absolute path on disk to agent.md")
+    file_path: str | None = Field(default=None, description="Absolute path on disk to agent.md")
     is_valid: bool = Field(default=True, description="False if file has syntax warnings or errors")
-    validation_error: Optional[str] = Field(default=None, description="Error details if invalid")
+    validation_error: str | None = Field(default=None, description="Error details if invalid")

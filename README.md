@@ -14,18 +14,24 @@
 ## 🌟 Key Features
 
 * 🔑 **Per-Agent Subscription Isolation (Multi-Tenant Auth):**
-  Create unlimited agents, each independently authenticated against its own subscription profile (`.auth/`). Agent A can run on personal Claude Pro, Agent B on company Antigravity SDK, with zero crosstalk.
+  Create unlimited agents, each independently authenticated against its own subscription profile (`.auth/`). Supports full RFC 8628 Device Authorization Grant (OAuth 2.0) with automated polling and token refresh, or direct token paste.
+* 🧩 **Model Context Protocol (MCP) Built-in Server:**
+  Exposes the agent's workspace and sandboxed tools (`execute_bash`, `read_file`, `write_file`, `list_dir`) as a native MCP server (`beherit mcp --agent-slug <slug>`), auto-injected into each agent's `mcp.json`.
+* 📚 **Local Semantic RAG (Knowledge Base):**
+  Lightweight hybrid vector & BM25 retrieval powered by SQLite FTS5. Automatically chunks documents in `knowledge/` and injects only query-relevant context into system prompts, eliminating token bloat.
 * 📝 **Markdown-First Architecture:**
   Every agent is defined as a plain directory with human-readable Markdown files (`agent.md`, `instructions.md`, `skills/`). Version-controlled, directly editable in Obsidian or VS Code, and synchronized with the Web UI.
 * ⚡ **Zero Additional Token Costs:**
   Leverages desktop and cloud Agent SDK sessions instead of per-token API billing.
 * 📱 **Mobile PWA First (Safari iOS & Desktop):**
-  Designed for seamless interaction on mobile devices (iOS safe-area, virtual keyboard handling) with real-time SSE streaming, reasoning thoughts visibility, and tool-call inspection.
+  Designed for seamless interaction on mobile devices (iOS safe-area, 100dvh, haptic feedback) with real-time SSE streaming, reasoning thoughts visibility, tool-call inspection, and stream cancellation (Stop button).
 * ⏰ **Dual Operational Modes:**
-  * **Interactive Live Chat:** Stream responses with thought process and interactive tool calls.
-  * **Autonomous Background Scheduler:** Periodic cron execution for automated audits, database maintenance, or data polling.
+  * **Interactive Live Chat:** Multi-turn conversational threads with instant Abort / Stream cancellation.
+  * **Autonomous Background Scheduler:** Periodic cron execution for automated audits, database maintenance, or data polling with multi-channel reports.
+* 🐳 **Multi-Architecture Docker Container:**
+  Production-ready multi-stage Docker image supporting `linux/arm64` (Raspberry Pi 5) and `linux/amd64` with persistent volume mounting and container healthchecks.
 * 🛡️ **Zero-Leak Security by Design:**
-  100% portable and environment-driven. Zero hardcoded server addresses, IPs, credentials, or private paths.
+  100% portable and environment-driven with optional PIN/Token Auth Guard middleware. Zero hardcoded server addresses, IPs, credentials, or private paths.
 
 ---
 
@@ -138,17 +144,23 @@ cp .env.example .env
 # Edit .env with your preferred port and secret key
 ```
 
-### 3. Run with Python
+### 3. Run with Python & uv
 ```bash
+# Using uv (fastest)
+uv sync --extra dev
+uv run beherit serve --host 0.0.0.0 --port 8650
+
+# Or standard virtualenv
 python3 -m venv .venv
 source .venv/bin/activate
 pip install -e ".[dev]"
-uvicorn beherit.main:app --host 0.0.0.0 --port 8650 --reload
+beherit serve --host 0.0.0.0 --port 8650
 ```
 
 ### 4. Or Run with Docker Compose
 ```bash
-docker compose up -d
+# Multi-arch build and start
+docker compose up -d --build
 ```
 
 Open your browser at `http://localhost:8650`.
