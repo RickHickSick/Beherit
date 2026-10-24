@@ -11,7 +11,8 @@ from beherit.core.auth_manager import AgentAuthManager
 from beherit.core.database import DatabaseManager
 from beherit.core.repository import AgentRepository
 from beherit.core.scheduler import AgentScheduler
-from beherit.engines.antigravity import AntigravityEngine
+from beherit.core.tools import CapabilitiesGuard
+from beherit.engines import EngineRegistry
 from beherit.models.agent import AgentModel, EngineType
 
 router = APIRouter(prefix="/api/agents", tags=["agents"])
@@ -20,8 +21,8 @@ history_router = APIRouter(prefix="/api/history", tags=["history"])
 repo = AgentRepository()
 auth_mgr = AgentAuthManager()
 db_mgr = DatabaseManager()
-antigravity_engine = AntigravityEngine(auth_manager=auth_mgr)
-scheduler = AgentScheduler(repository=repo, db_manager=db_mgr, engine=antigravity_engine)
+engine_registry = EngineRegistry(auth_manager=auth_mgr)
+scheduler = AgentScheduler(repository=repo, db_manager=db_mgr, engine_registry=engine_registry)
 
 
 # Request schemas
@@ -63,7 +64,17 @@ class OAuthVerifyRequest(BaseModel):
 
 class ChatMessageRequest(BaseModel):
     message: str = Field(..., min_length=1)
+    session_id: Optional[str] = Field(default=None, description="Optional ID of active chat session")
     history: Optional[List[Dict[str, str]]] = Field(default_factory=list)
+
+
+class CreateChatSessionRequest(BaseModel):
+    title: Optional[str] = Field(default=None, description="Optional chat session title")
+
+
+class ExecuteToolRequest(BaseModel):
+    tool: str = Field(..., description="Tool name: execute_bash, read_file, write_file, list_dir")
+    args: Dict[str, Any] = Field(default_factory=dict)
 
 
 # --- Agent CRUD Endpoints ---
@@ -249,21 +260,123 @@ async def get_recent_jobs_history(limit: int = 50):
     return {"history": db_mgr.get_recent_history(limit=limit)}
 
 
-# --- Streaming SSE Chat Endpoint ---
+# --- Chat Sessions & Persistence Endpoints ---
 
 
-@router.post("/{slug}/chat")
-async def stream_agent_chat(slug: str, payload: ChatMessageRequest):
-    """Stream response from agent using its dedicated subscription session."""
+@router.get("/{slug}/chats")
+async def list_agent_chat_sessions(slug: str, limit: int = 30):
+    """List stored chat sessions for this agent."""
+    agent = repo.load_agent(slug)
+    if not agent:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Agent not found.")
+    return {"sessions": db_mgr.get_agent_sessions(slug, limit=limit)}
+
+
+@router.post("/{slug}/chats", status_code=status.HTTP_201_CREATED)
+async def create_agent_chat_session(slug: str, payload: CreateChatSessionRequest):
+    """Create a new conversational thread for this agent."""
+    agent = repo.load_agent(slug)
+    if not agent:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Agent not found.")
+    session_id = db_mgr.create_chat_session(slug, title=payload.title)
+    return {"status": "created", "session_id": session_id}
+
+
+@router.get("/{slug}/chats/{session_id}")
+async def get_agent_chat_messages(slug: str, session_id: str):
+    """Retrieve full message history for a chat session."""
+    agent = repo.load_agent(slug)
+    if not agent:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Agent not found.")
+    messages = db_mgr.get_session_messages(session_id)
+    return {"session_id": session_id, "messages": messages}
+
+
+@router.delete("/{slug}/chats/{session_id}")
+async def delete_agent_chat_session(slug: str, session_id: str):
+    """Delete a chat session and all its messages."""
+    agent = repo.load_agent(slug)
+    if not agent:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Agent not found.")
+    deleted = db_mgr.delete_chat_session(session_id)
+    return {"status": "deleted", "success": deleted}
+
+
+# --- Tool Execution Endpoint ---
+
+
+@router.post("/{slug}/tools/execute")
+async def execute_agent_tool(slug: str, payload: ExecuteToolRequest):
+    """Execute a tool in the agent workspace adhering to its capabilities."""
     agent = repo.load_agent(slug)
     if not agent:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Agent not found.")
 
+    guard = CapabilitiesGuard()
+    result = await guard.dispatch_tool(agent, payload.tool, payload.args)
+    return {"status": "success" if result.get("success") else "failed", "result": result}
+
+
+# --- Streaming SSE Chat Endpoint with Multi-Turn Persistence ---
+
+
+@router.post("/{slug}/chat")
+async def stream_agent_chat(slug: str, payload: ChatMessageRequest):
+    """Stream response from agent with multi-turn persistence."""
+    agent = repo.load_agent(slug)
+    if not agent:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Agent not found.")
+
+    # Resolve or create persistent session
+    session_id = payload.session_id or db_mgr.create_chat_session(slug, title=payload.message[:40])
+
+    # Fetch prior conversation history from SQLite if not passed directly
+    history = payload.history or []
+    if not history and session_id:
+        prior_messages = db_mgr.get_session_messages(session_id)
+        history = [
+            {"role": m["role"], "content": m["content"]}
+            for m in prior_messages
+            if m.get("role") in ("user", "assistant")
+        ]
+
+    # Persist user message to SQLite
+    db_mgr.add_chat_message(session_id, slug, role="user", content=payload.message)
+
     async def event_generator():
-        async for chunk in antigravity_engine.stream_chat(agent, payload.message, payload.history):
+        # Inform client about active session ID
+        yield {
+            "event": "session",
+            "data": json.dumps({"session_id": session_id}),
+        }
+
+        assistant_tokens: List[str] = []
+        assistant_thoughts: List[str] = []
+
+        engine = engine_registry.get_engine(agent.engine)
+        async for chunk in engine.stream_chat(agent, payload.message, history):
+            event = chunk.get("event", "message")
+            data = chunk.get("data", "")
+
+            if event == "token":
+                assistant_tokens.append(data if isinstance(data, str) else str(data))
+            elif event == "thought":
+                assistant_thoughts.append(data if isinstance(data, str) else str(data))
+
             yield {
-                "event": chunk.get("event", "message"),
-                "data": json.dumps(chunk.get("data", "")),
+                "event": event,
+                "data": json.dumps(data),
             }
+
+        # Persist complete assistant answer and thoughts to DB
+        full_reply = "".join(assistant_tokens).strip()
+        if full_reply:
+            db_mgr.add_chat_message(
+                session_id=session_id,
+                agent_slug=slug,
+                role="assistant",
+                content=full_reply,
+                thoughts=assistant_thoughts if assistant_thoughts else None,
+            )
 
     return EventSourceResponse(event_generator())

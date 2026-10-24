@@ -39,7 +39,17 @@ async def test_terminal_restricted_sandbox(tmp_path: Path):
     # Blocked traversal attempt
     result_escape = await guard.execute_bash(agent, "cd / && ls -la")
     assert result_escape["success"] is False
-    assert "violates restricted sandbox policy" in result_escape["error"]
+    assert "forbidden" in result_escape["error"].lower() or "denied" in result_escape["error"].lower()
+
+    # Blocked sensitive path (/etc)
+    result_sensitive = await guard.execute_bash(agent, "cat /etc/passwd")
+    assert result_sensitive["success"] is False
+    assert "forbidden" in result_sensitive["error"].lower()
+
+    # Blocked parent traversal
+    result_traversal = await guard.execute_bash(agent, "cd .. && ls")
+    assert result_traversal["success"] is False
+    assert "forbidden" in result_traversal["error"].lower()
 
 
 @pytest.mark.asyncio
@@ -81,3 +91,38 @@ def test_file_read_and_write_containment(tmp_path: Path):
     outside_res = guard.write_file(agent, "/tmp/evil_file.txt", "data")
     assert outside_res["success"] is False
     assert "outside agent workspace" in outside_res["error"]
+
+
+@pytest.mark.asyncio
+async def test_tool_dispatcher(tmp_path: Path):
+    """Verify BEH-016: CapabilitiesGuard dispatch_tool executes supported tools."""
+    guard = CapabilitiesGuard(default_workspace=tmp_path)
+    agent = AgentModel(
+        name="Tool Agent",
+        slug="tool-agent",
+        capabilities=AgentCapabilities(
+            terminal=True,
+            terminal_mode=TerminalMode.RESTRICTED,
+            file_read=True,
+            file_write=True,
+        ),
+    )
+
+    # 1. Dispatch write_file
+    res_write = await guard.dispatch_tool(agent, "write_file", {"path": "test.txt", "content": "123"})
+    assert res_write["success"] is True
+
+    # 2. Dispatch read_file
+    res_read = await guard.dispatch_tool(agent, "read_file", {"path": "test.txt"})
+    assert res_read["success"] is True
+    assert res_read["content"] == "123"
+
+    # 3. Dispatch list_dir
+    res_list = await guard.dispatch_tool(agent, "list_dir", {"path": "."})
+    assert res_list["success"] is True
+    assert any(item["name"] == "test.txt" for item in res_list["items"])
+
+    # 4. Unknown tool
+    res_unknown = await guard.dispatch_tool(agent, "non_existent_tool", {})
+    assert res_unknown["success"] is False
+    assert "Unknown tool" in res_unknown["error"]

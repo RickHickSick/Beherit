@@ -9,7 +9,7 @@ from apscheduler.triggers.cron import CronTrigger
 from beherit.core.database import DatabaseManager
 from beherit.core.reporter import ReportDispatcher
 from beherit.core.repository import AgentRepository
-from beherit.engines.antigravity import AntigravityEngine
+from beherit.engines import EngineRegistry
 from beherit.models.agent import AgentModel
 
 
@@ -20,11 +20,11 @@ class AgentScheduler:
         self,
         repository: Optional[AgentRepository] = None,
         db_manager: Optional[DatabaseManager] = None,
-        engine: Optional[AntigravityEngine] = None,
+        engine_registry: Optional[EngineRegistry] = None,
     ):
         self.repo = repository or AgentRepository()
         self.db = db_manager or DatabaseManager()
-        self.engine = engine or AntigravityEngine()
+        self.engine_registry = engine_registry or EngineRegistry()
         self.reporter = ReportDispatcher(db_manager=self.db)
         self.scheduler = AsyncIOScheduler()
         self._running = False
@@ -82,8 +82,9 @@ class AgentScheduler:
         error_msg: Optional[str] = None
         status = "success"
 
+        engine = self.engine_registry.get_engine(agent.engine)
         try:
-            async for chunk in self.engine.stream_chat(agent, prompt):
+            async for chunk in engine.stream_chat(agent, prompt):
                 event = chunk.get("event")
                 data = chunk.get("data")
                 if event == "token":

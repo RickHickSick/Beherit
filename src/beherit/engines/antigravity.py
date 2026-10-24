@@ -4,6 +4,7 @@ import asyncio
 import json
 import os
 import shutil
+from pathlib import Path
 from typing import Any, AsyncIterator, Dict, List, Optional
 from beherit.core.auth_manager import AgentAuthManager
 from beherit.engines.base import BaseAgentEngine
