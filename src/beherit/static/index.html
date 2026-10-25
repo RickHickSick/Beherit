@@ -236,7 +236,8 @@
 
                 <button @click="runAgentNow(agent)"
                         :disabled="runningAgentSlug === agent.slug"
-                        class="text-xs bg-slate-800 hover:bg-slate-700 disabled:opacity-50 text-amber-300 font-medium px-2.5 py-1.5 rounded-xl transition flex items-center gap-1">
+                        :title="'Uruchom zadanie autonomiczne: ' + ((agent.schedule && agent.schedule.prompt) ? agent.schedule.prompt : 'Domyślny audyt agenta')"
+                        class="text-xs bg-slate-800 hover:bg-slate-700 disabled:opacity-50 text-amber-300 font-medium px-2.5 py-1.5 rounded-xl transition flex items-center gap-1 group">
                   <span x-text="runningAgentSlug === agent.slug ? '⏳ Praca...' : '⚡ Uruchom'"></span>
                 </button>
 
@@ -469,6 +470,12 @@
           <input type="text" x-model="newAgent.name" @input="newAgent.slug = generateSlug(newAgent.name)" placeholder="np. Analityk Rynków Finansowych" class="w-full bg-slate-800 text-slate-100 px-3.5 py-2.5 rounded-xl border border-slate-700 outline-none focus:border-emerald-500">
         </div>
 
+        <div>
+          <label class="block text-xs font-semibold text-slate-300 mb-0.5">Opis Agenta</label>
+          <p class="text-[11px] text-slate-400 mb-1.5">Krótki opis przeznaczenia agenta wyświetlany na kafelku pulpitu.</p>
+          <input type="text" x-model="newAgent.description" placeholder="np. Monitorowanie kursów walut, spółek giełdowych i wskaźników makro" class="w-full bg-slate-800 text-slate-100 px-3.5 py-2.5 rounded-xl border border-slate-700 outline-none focus:border-emerald-500">
+        </div>
+
         <div class="grid grid-cols-2 gap-3">
           <div>
             <label class="block text-xs font-semibold text-slate-300 mb-0.5">Slug (Folder)</label>
@@ -674,23 +681,28 @@
           </select>
         </div>
 
-        <!-- Schedule / Cron -->
-        <div class="p-3 bg-slate-950/70 rounded-xl border border-slate-800 space-y-2">
-          <div class="flex items-center justify-between">
-            <label class="text-xs font-semibold text-slate-300">Autonomiczny Harmonogram (Cron)</label>
-            <label class="relative inline-flex items-center cursor-pointer">
-              <input type="checkbox" x-model="editAgent.schedule_enabled" class="sr-only peer">
-              <div class="w-9 h-5 bg-slate-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-emerald-600"></div>
-            </label>
+        <!-- Zadanie autonomiczne i harmonogram Cron (BEH-042) -->
+        <div class="p-3.5 bg-slate-950/80 rounded-xl border border-slate-800 space-y-3">
+          <div>
+            <label class="block text-xs font-semibold text-slate-200 mb-0.5">Domyślne Zadanie Autonomiczne (Prompt dla „⚡ Uruchom” i Harmonogramu)</label>
+            <p class="text-[11px] text-slate-400 mb-1.5">Polecenie wykonywane przez agenta po kliknięciu przycisku <em>⚡ Uruchom</em> na kafelku lub w zaplanowanych godzinach. Wynik zapisuje się w zakładce Raporty oraz pliku <code>reports/*.md</code>.</p>
+            <textarea x-model="editAgent.schedule_prompt" rows="2" placeholder="np. Wykonaj zaplanowany audyt, sprawdź nowe dokumenty w bazie wiedzy i przygotuj zwięzłe podsumowanie." class="w-full bg-slate-800 text-slate-100 px-3.5 py-2 rounded-xl border border-slate-700 outline-none text-xs focus:border-emerald-500"></textarea>
           </div>
-          <div x-show="editAgent.schedule_enabled" class="space-y-2 pt-2 border-t border-slate-800/80">
-            <div>
-              <label class="block text-[11px] text-slate-400 mb-0.5">Wyrażenie Cron (np. 0 8 * * *)</label>
-              <input type="text" x-model="editAgent.schedule_cron" placeholder="0 8 * * *" class="w-full bg-slate-800 text-slate-100 px-3 py-2 rounded-lg border border-slate-700 outline-none font-mono text-xs">
+
+          <div class="pt-2 border-t border-slate-800/80">
+            <div class="flex items-center justify-between">
+              <div>
+                <label class="text-xs font-semibold text-slate-200 block">Harmonogram Automatyczny (Cron)</label>
+                <p class="text-[11px] text-slate-400">Cykliczne uruchamianie powyższego zadania w tle bez udziału użytkownika.</p>
+              </div>
+              <label class="relative inline-flex items-center cursor-pointer">
+                <input type="checkbox" x-model="editAgent.schedule_enabled" class="sr-only peer">
+                <div class="w-9 h-5 bg-slate-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-emerald-600"></div>
+              </label>
             </div>
-            <div>
-              <label class="block text-[11px] text-slate-400 mb-0.5">Cykliczny Prompt do wykonania</label>
-              <textarea x-model="editAgent.schedule_prompt" rows="2" placeholder="Polecenie uruchamiane zgodnie z harmonogramem..." class="w-full bg-slate-800 text-slate-100 px-3 py-2 rounded-lg border border-slate-700 outline-none text-xs"></textarea>
+            <div x-show="editAgent.schedule_enabled" class="space-y-1.5 pt-2">
+              <label class="block text-[11px] text-slate-300 mb-0.5">Wyrażenie Cron (np. co godzinę: <code>0 * * * *</code>, codziennie o 8:00: <code>0 8 * * *</code>)</label>
+              <input type="text" x-model="editAgent.schedule_cron" placeholder="0 8 * * *" class="w-full bg-slate-800 text-slate-100 px-3 py-2 rounded-lg border border-slate-700 outline-none font-mono text-xs">
             </div>
           </div>
         </div>
@@ -906,13 +918,25 @@
 
         <div class="space-y-3 flex-1">
           <div>
-            <label class="block text-xs font-semibold text-slate-300 mb-1">Adres URL *</label>
-            <input type="url" x-model="newKnowledgeLink.url" placeholder="https://www.youtube.com/watch?v=... lub https://docs.example.com/api" class="w-full bg-slate-800 text-slate-100 px-3 py-2 rounded-xl border border-slate-700 outline-none text-xs focus:border-sky-500 font-mono">
+            <div class="flex items-center justify-between mb-1">
+              <label class="block text-xs font-semibold text-slate-300">Adres URL *</label>
+              <button type="button" 
+                      @click="fetchLinkMetadata()" 
+                      :disabled="isFetchingLinkMetadata || !newKnowledgeLink.url.trim()"
+                      class="text-[11px] text-sky-400 hover:text-sky-300 disabled:opacity-40 flex items-center gap-1 font-medium transition">
+                <span x-text="isFetchingLinkMetadata ? '⏳ Pobieranie tytułu...' : '✨ Pobierz tytuł z linku'"></span>
+              </button>
+            </div>
+            <input type="url" 
+                   x-model="newKnowledgeLink.url" 
+                   @blur="if (!newKnowledgeLink.title.trim() && newKnowledgeLink.url.trim()) fetchLinkMetadata()"
+                   placeholder="https://www.youtube.com/watch?v=... lub https://docs.example.com/api" 
+                   class="w-full bg-slate-800 text-slate-100 px-3 py-2 rounded-xl border border-slate-700 outline-none text-xs focus:border-sky-500 font-mono">
           </div>
 
           <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
-              <label class="block text-xs font-semibold text-slate-300 mb-1">Tytuł Zasobu *</label>
+              <label class="block text-xs font-semibold text-slate-300 mb-1">Tytuł Zasobu (opcjonalny, auto-pobierany)</label>
               <input type="text" x-model="newKnowledgeLink.title" placeholder="np. Wykład o architekturze RAG lub Dokumentacja API" class="w-full bg-slate-800 text-slate-100 px-3 py-2 rounded-xl border border-slate-700 outline-none text-xs focus:border-sky-500">
             </div>
             <div>
@@ -1208,6 +1232,7 @@
         newAgent: {
           name: '',
           slug: '',
+          description: '',
           engine: 'antigravity',
           modelSelect: 'gemini-3.8-flash',
           model: 'gemini-3.8-flash',
@@ -1249,6 +1274,7 @@
         docEditorContent: '',
         isUploadingKnowledge: false,
         dragOverKnowledge: false,
+        isFetchingLinkMetadata: false,
         newKnowledgeLink: {
           url: '',
           title: '',
@@ -1279,6 +1305,16 @@
           setTimeout(() => {
             if (this.toastMessage === msg) this.toastMessage = '';
           }, 4000);
+        },
+
+        authHeaders() {
+          const token = localStorage.getItem('beherit_access_token');
+          const headers = {};
+          if (token) {
+            headers['X-Beherit-Token'] = token;
+            headers['Authorization'] = `Bearer ${token}`;
+          }
+          return headers;
         },
 
         async apiFetch(url, options = {}) {
@@ -1605,6 +1641,7 @@
           this.newAgent = {
             name: '',
             slug: '',
+            description: '',
             engine: 'antigravity',
             modelSelect: 'gemini-3.8-flash',
             model: 'gemini-3.8-flash',
@@ -1649,6 +1686,7 @@
             const payload = {
               name: this.newAgent.name,
               slug: this.newAgent.slug,
+              description: this.newAgent.description ? this.newAgent.description.trim() : '',
               engine: this.newAgent.engine,
               model: this.newAgent.model.trim(),
               terminal_mode: this.newAgent.terminal_mode,
@@ -1949,9 +1987,8 @@
             for (let i = 0; i < fileList.length; i++) {
               formData.append('files', fileList[i]);
             }
-            const res = await fetch(`/api/agents/${this.knowledgeTargetAgent.slug}/knowledge/upload`, {
+            const res = await this.apiFetch(`/api/agents/${this.knowledgeTargetAgent.slug}/knowledge/upload`, {
               method: 'POST',
-              headers: this.authHeaders(),
               body: formData
             });
             if (res.ok) {
@@ -1972,11 +2009,43 @@
           }
         },
 
+        async fetchLinkMetadata() {
+          if (!this.newKnowledgeLink.url || !this.newKnowledgeLink.url.trim()) return;
+          this.isFetchingLinkMetadata = true;
+          try {
+            const res = await this.apiFetch('/api/knowledge/fetch-metadata', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ url: this.newKnowledgeLink.url.trim() })
+            });
+            if (res.ok) {
+              const data = await res.json();
+              if (data.title && !this.newKnowledgeLink.title.trim()) {
+                this.newKnowledgeLink.title = data.title;
+              }
+              if (data.category && (!this.newKnowledgeLink.category || this.newKnowledgeLink.category === 'Wideo YouTube' || this.newKnowledgeLink.category === 'Strona WWW / Dokumentacja')) {
+                this.newKnowledgeLink.category = data.category;
+              }
+              if (data.description && !this.newKnowledgeLink.description.trim()) {
+                this.newKnowledgeLink.description = data.description;
+              }
+              this.showToast('Pobrano tytuł i metadane z linku');
+            }
+          } catch (e) {
+            console.warn('Metadata fetch error:', e);
+          } finally {
+            this.isFetchingLinkMetadata = false;
+          }
+        },
+
         async submitAddKnowledgeLink() {
           this.haptic();
-          if (!this.newKnowledgeLink.url.trim() || !this.newKnowledgeLink.title.trim()) {
-            alert('Podaj adres URL i tytuł źródła zewnętrznego.');
+          if (!this.newKnowledgeLink.url.trim()) {
+            alert('Podaj adres URL źródła zewnętrznego.');
             return;
+          }
+          if (!this.newKnowledgeLink.title.trim()) {
+            await this.fetchLinkMetadata();
           }
           try {
             const res = await this.apiFetch(`/api/agents/${this.knowledgeTargetAgent.slug}/knowledge/link`, {
@@ -1984,7 +2053,7 @@
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({
                 url: this.newKnowledgeLink.url.trim(),
-                title: this.newKnowledgeLink.title.trim(),
+                title: this.newKnowledgeLink.title ? this.newKnowledgeLink.title.trim() : null,
                 description: this.newKnowledgeLink.description.trim(),
                 category: this.newKnowledgeLink.category
               })
@@ -2000,10 +2069,10 @@
               }
             } else {
               const err = await res.json();
-              alert(`Błąd: ${err.detail || 'Nie udało się dodać linku'}`);
+              alert(`Błąd dodawania: ${err.detail || 'Błąd'}`);
             }
           } catch (e) {
-            alert(`Błąd: ${e.message}`);
+            alert(`Błąd sieci: ${e.message}`);
           }
         },
 
@@ -2070,7 +2139,8 @@
         async runAgentNow(agent) {
           this.haptic();
           this.runningAgentSlug = agent.slug;
-          this.showToast(`Uruchamianie zadania agenta ${agent.name}...`);
+          const promptPreview = (agent.schedule && agent.schedule.prompt) ? agent.schedule.prompt : 'Domyślny audyt agenta';
+          this.showToast(`Uruchamianie zadania: "${promptPreview.substring(0, 35)}..."`);
 
           try {
             const res = await this.apiFetch(`/api/agents/${agent.slug}/run-now`, {
@@ -2079,7 +2149,7 @@
 
             if (res.ok) {
               const data = await res.json();
-              this.showToast(`Zadanie zakończone! (${data.duration ? data.duration.toFixed(1) + 's' : 'Sukces'})`);
+              this.showToast(`Zadanie zakończone (${data.duration ? data.duration.toFixed(1) + 's' : 'Sukces'}). Raport zapisano.`);
               await this.loadHistory();
             } else {
               const err = await res.json();

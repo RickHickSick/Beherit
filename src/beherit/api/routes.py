@@ -29,6 +29,7 @@ from beherit.models.agent import (
 )
 
 router = APIRouter(prefix="/api/agents", tags=["agents"])
+knowledge_router = APIRouter(prefix="/api/knowledge", tags=["knowledge"])
 history_router = APIRouter(prefix="/api/history", tags=["history"])
 reports_router = APIRouter(prefix="/api/reports", tags=["reports"])
 auth_guard_router = APIRouter(prefix="/api/auth", tags=["auth_guard"])
@@ -81,9 +82,101 @@ class SaveKnowledgeRequest(BaseModel):
 
 class AddKnowledgeLinkRequest(BaseModel):
     url: str = Field(..., min_length=3, max_length=1000)
-    title: str = Field(..., min_length=1, max_length=200)
+    title: str | None = Field(default=None, max_length=200)
     description: str | None = Field(default="")
     category: str | None = Field(default=None)
+
+
+class FetchUrlMetadataRequest(BaseModel):
+    url: str = Field(..., min_length=3, max_length=1000)
+
+
+async def scrape_link_metadata(url: str) -> dict[str, str]:
+    """Fetch webpage title, description and category from URL or YouTube oEmbed."""
+    import html
+    from urllib.parse import urlparse
+    import httpx
+
+    url = url.strip()
+    is_yt = "youtube.com" in url or "youtu.be" in url
+    default_cat = "Wideo YouTube" if is_yt else "Strona WWW / Dokumentacja"
+
+    if is_yt:
+        try:
+            oembed_url = f"https://www.youtube.com/oembed?url={url}&format=json"
+            async with httpx.AsyncClient(timeout=5.0) as client:
+                res = await client.get(oembed_url)
+                if res.status_code == 200:
+                    data = res.json()
+                    title = data.get("title", "").strip()
+                    author = data.get("author_name", "").strip()
+                    desc = f"Kanał YouTube: {author}" if author else ""
+                    return {
+                        "title": title or "Wideo YouTube",
+                        "description": desc,
+                        "category": "Wideo YouTube",
+                    }
+        except Exception:
+            pass
+
+    # Generic webpage title scraping
+    try:
+        headers = {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        }
+        async with httpx.AsyncClient(timeout=6.0, follow_redirects=True, headers=headers) as client:
+            res = await client.get(url)
+            if res.status_code == 200:
+                html_text = res.text
+                title = ""
+                # 1. OpenGraph og:title
+                og_match = re.search(r'<meta\s+property=["\']og:title["\']\s+content=["\'](.*?)["\']', html_text, re.IGNORECASE)
+                if not og_match:
+                    og_match = re.search(r'<meta\s+content=["\'](.*?)["\']\s+property=["\']og:title["\']', html_text, re.IGNORECASE)
+                if og_match:
+                    title = og_match.group(1).strip()
+
+                # 2. HTML <title>
+                if not title:
+                    title_match = re.search(r"<title[^>]*>(.*?)</title>", html_text, re.IGNORECASE | re.DOTALL)
+                    if title_match:
+                        title = re.sub(r"\s+", " ", title_match.group(1)).strip()
+
+                # Description
+                desc = ""
+                desc_match = re.search(r'<meta\s+name=["\']description["\']\s+content=["\'](.*?)["\']', html_text, re.IGNORECASE)
+                if not desc_match:
+                    desc_match = re.search(r'<meta\s+property=["\']og:description["\']\s+content=["\'](.*?)["\']', html_text, re.IGNORECASE)
+                if desc_match:
+                    desc = desc_match.group(1).strip()
+
+                if title:
+                    title = html.unescape(title)[:200].strip()
+                    desc = html.unescape(desc)[:500].strip() if desc else ""
+                    return {
+                        "title": title,
+                        "description": desc,
+                        "category": default_cat,
+                    }
+    except Exception:
+        pass
+
+    try:
+        parsed = urlparse(url)
+        path = parsed.path.rstrip("/")
+        fallback_title = (parsed.netloc + path).strip("/")
+        return {
+            "title": fallback_title or url,
+            "description": "",
+            "category": default_cat,
+        }
+    except Exception:
+        return {
+            "title": url,
+            "description": "",
+            "category": default_cat,
+        }
 
 
 class KnowledgeSearchRequest(BaseModel):
@@ -614,6 +707,18 @@ async def upload_agent_knowledge_files(slug: str, files: list[UploadFile] = File
     }
 
 
+@router.post("/knowledge/fetch-metadata")
+async def fetch_url_metadata_endpoint(payload: FetchUrlMetadataRequest):
+    """Fetch title, description and category from URL or YouTube video."""
+    return await scrape_link_metadata(payload.url)
+
+
+@knowledge_router.post("/fetch-metadata")
+async def fetch_url_metadata_direct_endpoint(payload: FetchUrlMetadataRequest):
+    """Fetch title, description and category from URL or YouTube video."""
+    return await scrape_link_metadata(payload.url)
+
+
 @router.post("/{slug}/knowledge/link")
 async def add_agent_knowledge_link(slug: str, payload: AddKnowledgeLinkRequest):
     """Add external reference link (Website, documentation, YouTube video) to the agent's knowledge base."""
@@ -625,20 +730,34 @@ async def add_agent_knowledge_link(slug: str, payload: AddKnowledgeLinkRequest):
     knowledge_dir = agent_dir / "knowledge"
     knowledge_dir.mkdir(parents=True, exist_ok=True)
 
-    is_yt = "youtube.com" in payload.url or "youtu.be" in payload.url
-    cat = payload.category or ("Wideo YouTube" if is_yt else "Strona WWW / Dokumentacja")
+    final_title = payload.title.strip() if payload.title and payload.title.strip() else ""
+    final_desc = payload.description.strip() if payload.description and payload.description.strip() else ""
+    final_cat = payload.category
+
+    # If title wasn't provided, auto-scrape from URL
+    if not final_title:
+        meta = await scrape_link_metadata(payload.url)
+        final_title = meta.get("title") or payload.url.strip()
+        if not final_desc:
+            final_desc = meta.get("description", "")
+        if not final_cat:
+            final_cat = meta.get("category")
+
+    if not final_cat:
+        is_yt = "youtube.com" in payload.url or "youtu.be" in payload.url
+        final_cat = "Wideo YouTube" if is_yt else "Strona WWW / Dokumentacja"
 
     # Clean title to valid filename
-    clean_slug = re.sub(r"[^\w\-_]", "_", payload.title.strip().lower())[:40].strip("_")
+    clean_slug = re.sub(r"[^\w\-_]", "_", final_title.strip().lower())[:40].strip("_")
     if not clean_slug:
         clean_slug = f"source_{int(time.time())}"
     filename = f"link_{clean_slug}.md"
     target_file = knowledge_dir / filename
 
-    notes_section = payload.description.strip() if payload.description and payload.description.strip() else "(Brak dodatkowych notatek)"
+    notes_section = final_desc if final_desc else "(Brak dodatkowych notatek)"
     md_content = (
-        f"# 🔗 {payload.title.strip()}\n\n"
-        f"- **Kategoria:** {cat}\n"
+        f"# 🔗 {final_title.strip()}\n\n"
+        f"- **Kategoria:** {final_cat}\n"
         f"- **Adres URL:** {payload.url.strip()}\n"
         f"- **Data dodania:** {time.strftime('%Y-%m-%d %H:%M:%S')}\n\n"
         f"## Opis / Transkrypcja / Notatki Kluczowe\n"
@@ -655,7 +774,7 @@ async def add_agent_knowledge_link(slug: str, payload: AddKnowledgeLinkRequest):
     return {
         "status": "created",
         "filename": filename,
-        "title": payload.title,
+        "title": final_title,
         "url": payload.url,
         "total_chunks": total_chunks,
     }

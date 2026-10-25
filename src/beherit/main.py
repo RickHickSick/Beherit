@@ -13,6 +13,7 @@ from beherit import __version__
 from beherit.api.routes import (
     auth_guard_router,
     history_router,
+    knowledge_router,
     reports_router,
     scheduler,
 )
@@ -86,6 +87,7 @@ app.add_middleware(
 )
 
 app.include_router(agents_router)
+app.include_router(knowledge_router)
 app.include_router(history_router)
 app.include_router(reports_router)
 app.include_router(auth_guard_router)

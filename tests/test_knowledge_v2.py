@@ -221,3 +221,45 @@ def test_api_upload_link_raw_and_delete(tmp_path: Path, monkeypatch):
 
     list_after = client.get(f"/api/agents/{slug}/knowledge").json()["files"]
     assert "schemat.png" not in [f["filename"] for f in list_after]
+
+
+def test_fetch_metadata_and_auto_title_link(tmp_path: Path, monkeypatch):
+    """Test automatic title scraping for external links and fetch-metadata endpoint (BEH-040, BEH-041)."""
+    monkeypatch.setattr(repo, "base_dir", tmp_path)
+    monkeypatch.setattr(auth_mgr, "base_dir", tmp_path)
+
+    # 1. Test metadata endpoint
+    meta_resp = client.post(
+        "/api/knowledge/fetch-metadata",
+        json={"url": "https://example.com/test-article"},
+    )
+    assert meta_resp.status_code == 200
+    data = meta_resp.json()
+    assert "title" in data
+    assert data["category"] in ["Strona WWW / Dokumentacja", "Wideo YouTube"]
+
+    # 2. Test creating agent with description (BEH-041)
+    slug = "test-agent-desc"
+    create_resp = client.post(
+        "/api/agents",
+        json={
+            "name": "Agent with Description",
+            "slug": slug,
+            "description": "Opis agenta rynkowego testowego",
+            "engine": "antigravity",
+            "model": "gemini-3.8-flash",
+        },
+    )
+    assert create_resp.status_code == 201
+    assert create_resp.json()["agent"]["description"] == "Opis agenta rynkowego testowego"
+
+    # 3. Test adding link without title (BEH-040)
+    auto_link_resp = client.post(
+        f"/api/agents/{slug}/knowledge/link",
+        json={
+            "url": "https://example.com/auto-page",
+        },
+    )
+    assert auto_link_resp.status_code == 200
+    assert auto_link_resp.json()["status"] == "created"
+    assert auto_link_resp.json()["title"]
