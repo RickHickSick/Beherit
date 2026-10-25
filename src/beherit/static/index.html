@@ -464,17 +464,20 @@
 
       <div class="space-y-4 text-sm">
         <div>
-          <label class="block text-xs font-semibold text-slate-300 mb-1">Nazwa Agenta</label>
+          <label class="block text-xs font-semibold text-slate-300 mb-0.5">Nazwa Agenta</label>
+          <p class="text-[11px] text-slate-400 mb-1.5">Czytelna nazwa wyświetlana na pulpicie, w czacie i w nagłówkach raportów.</p>
           <input type="text" x-model="newAgent.name" @input="newAgent.slug = generateSlug(newAgent.name)" placeholder="np. Analityk Rynków Finansowych" class="w-full bg-slate-800 text-slate-100 px-3.5 py-2.5 rounded-xl border border-slate-700 outline-none focus:border-emerald-500">
         </div>
 
         <div class="grid grid-cols-2 gap-3">
           <div>
-            <label class="block text-xs font-semibold text-slate-300 mb-1">Slug (Folder)</label>
+            <label class="block text-xs font-semibold text-slate-300 mb-0.5">Slug (Folder)</label>
+            <p class="text-[11px] text-slate-400 mb-1.5">Unikalna nazwa folderu w sejfie Obsidian (litery, cyfry, myślniki).</p>
             <input type="text" x-model="newAgent.slug" placeholder="analityk-rynkow" class="w-full bg-slate-800 text-slate-100 px-3.5 py-2.5 rounded-xl border border-slate-700 outline-none font-mono text-xs">
           </div>
           <div>
-            <label class="block text-xs font-semibold text-slate-300 mb-1">Silnik SDK</label>
+            <label class="block text-xs font-semibold text-slate-300 mb-0.5">Silnik SDK</label>
+            <p class="text-[11px] text-slate-400 mb-1.5">Platforma wykonawcza agenta i środowisko adaptera subskrypcji.</p>
             <select x-model="newAgent.engine" @change="onNewAgentEngineChange()" class="w-full bg-slate-800 text-slate-100 px-3.5 py-2.5 rounded-xl border border-slate-700 outline-none">
               <option value="antigravity">Google Antigravity SDK</option>
               <option value="claude-code">Claude Code SDK</option>
@@ -484,12 +487,24 @@
         </div>
 
         <div>
-          <label class="block text-xs font-semibold text-slate-300 mb-1">Model Silnika</label>
-          <input type="text" x-model="newAgent.model" class="w-full bg-slate-800 text-slate-100 px-3.5 py-2.5 rounded-xl border border-slate-700 outline-none font-mono text-xs">
+          <label class="block text-xs font-semibold text-slate-300 mb-0.5">Model Silnika</label>
+          <p class="text-[11px] text-slate-400 mb-1.5">Model językowy (LLM) odpowiadający za rozumowanie i generowanie odpowiedzi.</p>
+          <div class="space-y-2">
+            <select x-model="newAgent.modelSelect" @change="onNewAgentModelSelectChange()" class="w-full bg-slate-800 text-slate-100 px-3.5 py-2.5 rounded-xl border border-slate-700 outline-none">
+              <template x-for="m in (engineModelOptions[newAgent.engine] || [])" :key="m.id">
+                <option :value="m.id" x-text="m.name"></option>
+              </template>
+              <option value="custom">Inny / Własny model (wpisz ręcznie)...</option>
+            </select>
+            <div x-show="newAgent.modelSelect === 'custom'">
+              <input type="text" x-model="newAgent.model" placeholder="Wpisz pełną nazwę modelu, np. mistral-large, deepseek-r1..." class="w-full bg-slate-800 text-slate-100 px-3.5 py-2 rounded-xl border border-slate-700 outline-none font-mono text-xs focus:border-emerald-500">
+            </div>
+          </div>
         </div>
 
         <div>
-          <label class="block text-xs font-semibold text-slate-300 mb-1">Poziom Uprawnień Terminala (Bash)</label>
+          <label class="block text-xs font-semibold text-slate-300 mb-0.5">Poziom Uprawnień Terminala (Bash)</label>
+          <p class="text-[11px] text-slate-400 mb-1.5">Granice dostępu agenta do powłoki bash hosta. <em>Piaskownica</em> izoluje polecenia w folderze agenta i blokuje wrażliwe ścieżki.</p>
           <select x-model="newAgent.terminal_mode" class="w-full bg-slate-800 text-slate-100 px-3.5 py-2.5 rounded-xl border border-slate-700 outline-none">
             <option value="restricted">Piaskownica (Tylko katalog roboczy agenta)</option>
             <option value="unrestricted">Pełna swoboda (Brak ograniczeń ścieżek na hoście)</option>
@@ -499,11 +514,14 @@
 
         <!-- SEKCJA POŁĄCZENIA: KLUCZ SDK LUB API -->
         <div class="p-3.5 bg-slate-950/80 rounded-xl border border-slate-800 space-y-3">
-          <div class="flex items-center justify-between">
-            <label class="block text-xs font-semibold text-slate-200 flex items-center gap-1.5">
-              <span>🔑</span> Połączenie Agenta
-            </label>
-            <span class="text-[10px] text-slate-400">Klucz: API lub SDK</span>
+          <div>
+            <div class="flex items-center justify-between">
+              <label class="block text-xs font-semibold text-slate-200 flex items-center gap-1.5">
+                <span>🔑</span> Połączenie Agenta
+              </label>
+              <span class="text-[10px] text-slate-400">Klucz: API lub SDK</span>
+            </div>
+            <p class="text-[11px] text-slate-400 mt-0.5">Odizolowane uwierzytelnienie subskrypcji zapisywane w <code>.auth/session.json</code> (0600) — wybierz Klucz API lub użyj sesji z hosta.</p>
           </div>
 
           <!-- Przełącznik metody: Klucz API vs Klucz SDK -->
@@ -576,13 +594,15 @@
         </div>
 
         <div>
-          <label class="block text-xs font-semibold text-slate-300 mb-1">Master Prompt (Główna Rola Agenta)</label>
-          <textarea x-model="newAgent.master_prompt" rows="3" placeholder="Zdefiniuj cel i zachowanie agenta..." class="w-full bg-slate-800 text-slate-100 px-3.5 py-2.5 rounded-xl border border-slate-700 outline-none text-xs focus:border-emerald-500"></textarea>
+          <label class="block text-xs font-semibold text-slate-300 mb-0.5">Master Prompt (Główna Rola Agenta)</label>
+          <p class="text-[11px] text-slate-400 mb-1.5"><strong>Kim agent jest:</strong> nadrzędna tożsamość, persona, misja i ton wypowiedzi. Zapisywany jako treść pliku <code>agent.md</code> w Obsidianie.</p>
+          <textarea x-model="newAgent.master_prompt" rows="3" placeholder="Zdefiniuj tożsamość, rolę i cel główny agenta..." class="w-full bg-slate-800 text-slate-100 px-3.5 py-2.5 rounded-xl border border-slate-700 outline-none text-xs focus:border-emerald-500"></textarea>
         </div>
 
         <div>
-          <label class="block text-xs font-semibold text-slate-300 mb-1">Wytyczne operacyjne (instructions.md)</label>
-          <textarea x-model="newAgent.instructions" rows="2" placeholder="Konkretne zasady i procedury..." class="w-full bg-slate-800 text-slate-100 px-3.5 py-2.5 rounded-xl border border-slate-700 outline-none text-xs focus:border-emerald-500"></textarea>
+          <label class="block text-xs font-semibold text-slate-300 mb-0.5">Wytyczne operacyjne (instructions.md)</label>
+          <p class="text-[11px] text-slate-400 mb-1.5"><strong>Jak agent działa:</strong> standardowe procedury (SOP), reguły formatowania tabel/danych, ograniczenia i zakazy (zapisywane w <code>instructions.md</code>).</p>
+          <textarea x-model="newAgent.instructions" rows="2" placeholder="Konkretne zasady, reguły formatowania tabel i procedury operacyjne..." class="w-full bg-slate-800 text-slate-100 px-3.5 py-2.5 rounded-xl border border-slate-700 outline-none text-xs focus:border-emerald-500"></textarea>
         </div>
       </div>
 
@@ -605,33 +625,48 @@
 
       <div class="space-y-4 text-sm">
         <div>
-          <label class="block text-xs font-semibold text-slate-300 mb-1">Nazwa Agenta</label>
+          <label class="block text-xs font-semibold text-slate-300 mb-0.5">Nazwa Agenta</label>
+          <p class="text-[11px] text-slate-400 mb-1">Widoczna nazwa agenta.</p>
           <input type="text" x-model="editAgent.name" class="w-full bg-slate-800 text-slate-100 px-3.5 py-2.5 rounded-xl border border-slate-700 outline-none focus:border-emerald-500">
         </div>
 
         <div>
-          <label class="block text-xs font-semibold text-slate-300 mb-1">Opis Agenta</label>
+          <label class="block text-xs font-semibold text-slate-300 mb-0.5">Opis Agenta</label>
+          <p class="text-[11px] text-slate-400 mb-1">Krótki opis przeznaczenia agenta wyświetlany na kafelku.</p>
           <input type="text" x-model="editAgent.description" class="w-full bg-slate-800 text-slate-100 px-3.5 py-2.5 rounded-xl border border-slate-700 outline-none focus:border-emerald-500">
         </div>
 
         <div class="grid grid-cols-2 gap-3">
           <div>
-            <label class="block text-xs font-semibold text-slate-300 mb-1">Silnik SDK</label>
-            <select x-model="editAgent.engine" class="w-full bg-slate-800 text-slate-100 px-3.5 py-2.5 rounded-xl border border-slate-700 outline-none">
+            <label class="block text-xs font-semibold text-slate-300 mb-0.5">Silnik SDK</label>
+            <p class="text-[11px] text-slate-400 mb-1">Adapter subskrypcji.</p>
+            <select x-model="editAgent.engine" @change="onEditAgentEngineChange()" class="w-full bg-slate-800 text-slate-100 px-3.5 py-2.5 rounded-xl border border-slate-700 outline-none">
               <option value="antigravity">Google Antigravity SDK</option>
               <option value="claude-code">Claude Code SDK</option>
               <option value="codex">OpenAI Codex</option>
             </select>
           </div>
           <div>
-            <label class="block text-xs font-semibold text-slate-300 mb-1">Model Silnika</label>
-            <input type="text" x-model="editAgent.model" class="w-full bg-slate-800 text-slate-100 px-3.5 py-2.5 rounded-xl border border-slate-700 outline-none font-mono text-xs">
+            <label class="block text-xs font-semibold text-slate-300 mb-0.5">Model Silnika</label>
+            <p class="text-[11px] text-slate-400 mb-1">Model LLM.</p>
+            <select x-model="editAgent.modelSelect" @change="onEditAgentModelSelectChange()" class="w-full bg-slate-800 text-slate-100 px-3.5 py-2.5 rounded-xl border border-slate-700 outline-none">
+              <template x-for="m in (engineModelOptions[editAgent.engine] || [])" :key="m.id">
+                <option :value="m.id" x-text="m.name"></option>
+              </template>
+              <option value="custom">Inny / Własny model...</option>
+            </select>
           </div>
+        </div>
+
+        <div x-show="editAgent.modelSelect === 'custom'">
+          <label class="block text-xs font-semibold text-slate-300 mb-0.5">Własna nazwa modelu</label>
+          <input type="text" x-model="editAgent.model" placeholder="Wpisz identyfikator modelu..." class="w-full bg-slate-800 text-slate-100 px-3.5 py-2 rounded-xl border border-slate-700 outline-none font-mono text-xs focus:border-emerald-500">
         </div>
 
         <!-- Terminal Mode -->
         <div>
-          <label class="block text-xs font-semibold text-slate-300 mb-1">Poziom Uprawnień Terminala (Bash)</label>
+          <label class="block text-xs font-semibold text-slate-300 mb-0.5">Poziom Uprawnień Terminala (Bash)</label>
+          <p class="text-[11px] text-slate-400 mb-1">Uprawnienia powłoki bash dla agenta.</p>
           <select x-model="editAgent.terminal_mode" class="w-full bg-slate-800 text-slate-100 px-3.5 py-2.5 rounded-xl border border-slate-700 outline-none">
             <option value="restricted">Piaskownica (Tylko katalog roboczy agenta)</option>
             <option value="unrestricted">Pełna swoboda (Brak ograniczeń ścieżek na hoście)</option>
@@ -1149,12 +1184,32 @@
         chatInput: '',
         isStreaming: false,
 
+        // Engine model presets
+        engineModelOptions: {
+          'antigravity': [
+            { id: 'gemini-3.8-flash', name: 'Gemini 3.8 Flash (Domyślny, szybki)' },
+            { id: 'gemini-3.8-pro', name: 'Gemini 3.8 Pro (Złożona analiza i reasoning)' },
+            { id: 'claude-3-7-sonnet', name: 'Claude 3.7 Sonnet (W sesji Antigravity)' }
+          ],
+          'claude-code': [
+            { id: 'claude-3-7-sonnet-20250219', name: 'Claude 3.7 Sonnet (Thinking / domyślny)' },
+            { id: 'claude-3-5-sonnet-20241022', name: 'Claude 3.5 Sonnet v2' },
+            { id: 'claude-3-5-haiku-20241022', name: 'Claude 3.5 Haiku (Lekki i szybki)' }
+          ],
+          'codex': [
+            { id: 'gpt-4o', name: 'GPT-4o (Wszechstronny / multimodalny)' },
+            { id: 'gpt-4o-mini', name: 'GPT-4o Mini (Szybki i ekonomiczny)' },
+            { id: 'o3-mini', name: 'o3-mini (Zaawansowane wnioskowanie)' }
+          ]
+        },
+
         // Create Modal
         openCreateModal: false,
         newAgent: {
           name: '',
           slug: '',
           engine: 'antigravity',
+          modelSelect: 'gemini-3.8-flash',
           model: 'gemini-3.8-flash',
           terminal_mode: 'restricted',
           master_prompt: 'Jesteś autonomicznym analitykiem AI.',
@@ -1171,6 +1226,7 @@
           name: '',
           description: '',
           engine: 'antigravity',
+          modelSelect: 'gemini-3.8-flash',
           model: '',
           terminal_mode: 'restricted',
           schedule_enabled: false,
@@ -1550,6 +1606,7 @@
             name: '',
             slug: '',
             engine: 'antigravity',
+            modelSelect: 'gemini-3.8-flash',
             model: 'gemini-3.8-flash',
             terminal_mode: 'restricted',
             master_prompt: 'Jesteś autonomicznym analitykiem AI.',
@@ -1563,24 +1620,37 @@
         },
 
         onNewAgentEngineChange() {
-          if (this.newAgent.engine === 'antigravity') {
-            this.newAgent.model = 'gemini-3.8-flash';
-          } else if (this.newAgent.engine === 'claude-code') {
-            this.newAgent.model = 'claude-3-7-sonnet-20250219';
-          } else if (this.newAgent.engine === 'codex') {
-            this.newAgent.model = 'gpt-4o';
-          }
+          const defaultModels = {
+            'antigravity': 'gemini-3.8-flash',
+            'claude-code': 'claude-3-7-sonnet-20250219',
+            'codex': 'gpt-4o'
+          };
+          const def = defaultModels[this.newAgent.engine] || 'gemini-3.8-flash';
+          this.newAgent.modelSelect = def;
+          this.newAgent.model = def;
           this.newAgent.import_server_auth = false;
+        },
+
+        onNewAgentModelSelectChange() {
+          if (this.newAgent.modelSelect === 'custom') {
+            this.newAgent.model = '';
+          } else {
+            this.newAgent.model = this.newAgent.modelSelect;
+          }
         },
 
         async submitCreateAgent() {
           this.haptic();
+          if (!this.newAgent.model || !this.newAgent.model.trim()) {
+            alert('Wybierz lub wpisz model silnika.');
+            return;
+          }
           try {
             const payload = {
               name: this.newAgent.name,
               slug: this.newAgent.slug,
               engine: this.newAgent.engine,
-              model: this.newAgent.model,
+              model: this.newAgent.model.trim(),
               terminal_mode: this.newAgent.terminal_mode,
               master_prompt: this.newAgent.master_prompt,
               instructions: this.newAgent.instructions,
@@ -1616,12 +1686,19 @@
           if (agent.mcp_servers && Object.keys(agent.mcp_servers).length > 0) {
             mcpJsonStr = JSON.stringify(agent.mcp_servers, null, 2);
           }
+          const engine = agent.engine || 'antigravity';
+          const model = agent.model || '';
+          const opts = this.engineModelOptions[engine] || [];
+          const isPreset = opts.some(m => m.id === model);
+          const modelSelect = isPreset ? model : (model ? 'custom' : (opts[0]?.id || 'custom'));
+
           this.editAgent = {
             slug: agent.slug,
             name: agent.name || '',
             description: agent.description || '',
-            engine: agent.engine || 'antigravity',
-            model: agent.model || '',
+            engine: engine,
+            modelSelect: modelSelect,
+            model: model || (isPreset ? modelSelect : ''),
             terminal_mode: (agent.capabilities && agent.capabilities.terminal_mode) || 'restricted',
             schedule_enabled: !!(agent.schedule && agent.schedule.enabled),
             schedule_cron: (agent.schedule && agent.schedule.cron) || '0 8 * * *',
@@ -1633,8 +1710,31 @@
           this.openEditModal = true;
         },
 
+        onEditAgentEngineChange() {
+          const defaultModels = {
+            'antigravity': 'gemini-3.8-flash',
+            'claude-code': 'claude-3-7-sonnet-20250219',
+            'codex': 'gpt-4o'
+          };
+          const def = defaultModels[this.editAgent.engine] || 'gemini-3.8-flash';
+          this.editAgent.modelSelect = def;
+          this.editAgent.model = def;
+        },
+
+        onEditAgentModelSelectChange() {
+          if (this.editAgent.modelSelect === 'custom') {
+            this.editAgent.model = '';
+          } else {
+            this.editAgent.model = this.editAgent.modelSelect;
+          }
+        },
+
         async submitUpdateAgent() {
           this.haptic();
+          if (!this.editAgent.model || !this.editAgent.model.trim()) {
+            alert('Wybierz lub wpisz model silnika.');
+            return;
+          }
           try {
             let parsedMcp = {};
             if (this.editAgent.mcp_servers_json.trim()) {
@@ -1650,7 +1750,7 @@
               name: this.editAgent.name,
               description: this.editAgent.description,
               engine: this.editAgent.engine,
-              model: this.editAgent.model,
+              model: this.editAgent.model.trim(),
               master_prompt: this.editAgent.master_prompt,
               instructions: this.editAgent.instructions,
               mcp_servers: parsedMcp,
