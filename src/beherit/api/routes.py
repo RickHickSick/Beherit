@@ -295,6 +295,136 @@ async def create_agent(payload: CreateAgentRequest):
     }
 
 
+@router.get("/models/available")
+async def get_available_models(engine: str = "antigravity", agent_slug: str | None = None):
+    """Dynamically fetch or refresh available LLM models for the given engine/account (BEH-043)."""
+    import os
+    import httpx
+
+    models: list[dict[str, str]] = []
+    source = "curated"
+
+    token = None
+    if agent_slug:
+        token = auth_mgr.get_token(agent_slug)
+
+    engine_clean = engine.lower().replace("_", "-")
+
+    if engine_clean in ["antigravity", "gemini"]:
+        gemini_key = token or os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY")
+        if gemini_key and not gemini_key.startswith("oauth_"):
+            try:
+                url = f"https://generativelanguage.googleapis.com/v1beta/models?key={gemini_key}"
+                async with httpx.AsyncClient(timeout=4.0) as client:
+                    resp = await client.get(url)
+                    if resp.status_code == 200:
+                        data = resp.json()
+                        fetched = []
+                        for m in data.get("models", []):
+                            m_id = m.get("name", "").replace("models/", "")
+                            if "gemini" in m_id:
+                                disp = m.get("displayName", m_id)
+                                fetched.append({"id": m_id, "name": f"{disp} ({m_id})"})
+                        if fetched:
+                            models = fetched
+                            source = "live_api"
+            except Exception:
+                pass
+
+        if not models:
+            models = [
+                {"id": "gemini-3.8-flash", "name": "Gemini 3.8 Flash (Domyślny, szybki)"},
+                {"id": "gemini-3.8-pro", "name": "Gemini 3.8 Pro (Złożona analiza i reasoning)"},
+                {"id": "gemini-2.5-pro", "name": "Gemini 2.5 Pro (Thinking / Advanced Reasoning)"},
+                {"id": "gemini-2.5-flash", "name": "Gemini 2.5 Flash (Ultra szybki)"},
+                {"id": "gemini-2.0-flash", "name": "Gemini 2.0 Flash"},
+                {"id": "claude-3-7-sonnet", "name": "Claude 3.7 Sonnet (W sesji Antigravity)"},
+            ]
+
+    elif engine_clean in ["claude-code", "claude", "anthropic"]:
+        anthropic_key = token or os.getenv("ANTHROPIC_API_KEY")
+        if anthropic_key and anthropic_key.startswith("sk-ant-"):
+            try:
+                url = "https://api.anthropic.com/v1/models"
+                headers = {"x-api-key": anthropic_key, "anthropic-version": "2023-06-01"}
+                async with httpx.AsyncClient(timeout=4.0) as client:
+                    resp = await client.get(url, headers=headers)
+                    if resp.status_code == 200:
+                        data = resp.json()
+                        fetched = []
+                        for m in data.get("data", []):
+                            m_id = m.get("id", "")
+                            disp = m.get("display_name", m_id)
+                            fetched.append({"id": m_id, "name": f"{disp} ({m_id})"})
+                        if fetched:
+                            models = fetched
+                            source = "live_api"
+            except Exception:
+                pass
+
+        if not models:
+            models = [
+                {"id": "claude-3-7-sonnet-20250219", "name": "Claude 3.7 Sonnet (Thinking / domyślny)"},
+                {"id": "claude-3-5-sonnet-20241022", "name": "Claude 3.5 Sonnet v2"},
+                {"id": "claude-3-5-haiku-20241022", "name": "Claude 3.5 Haiku (Lekki i szybki)"},
+                {"id": "claude-3-opus-20240229", "name": "Claude 3 Opus (Głębokie rozumowanie)"},
+            ]
+
+    elif engine_clean in ["codex", "openai"]:
+        openai_key = token or os.getenv("OPENAI_API_KEY")
+        if openai_key and openai_key.startswith("sk-"):
+            try:
+                url = "https://api.openai.com/v1/models"
+                headers = {"Authorization": f"Bearer {openai_key}"}
+                async with httpx.AsyncClient(timeout=4.0) as client:
+                    resp = await client.get(url, headers=headers)
+                    if resp.status_code == 200:
+                        data = resp.json()
+                        fetched = []
+                        for m in data.get("data", []):
+                            m_id = m.get("id", "")
+                            if any(m_id.startswith(p) for p in ["gpt-4o", "o1", "o3", "gpt-4-turbo", "chatgpt-"]):
+                                fetched.append({"id": m_id, "name": m_id})
+                        if fetched:
+                            fetched.sort(key=lambda x: x["id"])
+                            models = fetched
+                            source = "live_api"
+            except Exception:
+                pass
+
+        if not models:
+            models = [
+                {"id": "gpt-4o", "name": "GPT-4o (Wszechstronny / multimodalny)"},
+                {"id": "gpt-4o-mini", "name": "GPT-4o Mini (Szybki i ekonomiczny)"},
+                {"id": "o3-mini", "name": "o3-mini (Zaawansowane wnioskowanie)"},
+                {"id": "o1", "name": "o1 (Reasoning / deep thought)"},
+                {"id": "o1-mini", "name": "o1-mini (Szybki reasoning)"},
+                {"id": "gpt-4-turbo", "name": "GPT-4 Turbo"},
+            ]
+
+    # Include local Ollama models if service is running
+    ollama_models: list[dict[str, str]] = []
+    try:
+        ollama_host = os.getenv("OLLAMA_HOST", "http://localhost:11434")
+        async with httpx.AsyncClient(timeout=1.0) as client:
+            resp = await client.get(f"{ollama_host}/api/tags")
+            if resp.status_code == 200:
+                for om in resp.json().get("models", []):
+                    m_name = om.get("name", "")
+                    if m_name:
+                        ollama_models.append({"id": f"ollama/{m_name}", "name": f"🦙 Ollama: {m_name}"})
+    except Exception:
+        pass
+
+    return {
+        "engine": engine,
+        "models": models,
+        "ollama_models": ollama_models,
+        "source": source,
+        "count": len(models),
+    }
+
+
 @router.get("/{slug}")
 async def get_agent(slug: str):
     """Get single agent specification and status."""
@@ -600,6 +730,29 @@ async def view_report(path: str):
         }
     except Exception as e:
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+
+
+@reports_router.get("/artifact")
+async def view_report_artifact(path: str):
+    """Safely stream a generated media artifact, image, video, or data file (BEH-047)."""
+    artifact_file = Path(path).resolve()
+    if not artifact_file.is_file():
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Artifact file not found.")
+
+    forbidden_prefixes = ["/etc", "/proc", "/sys", "/dev", "/root", "/var/run"]
+    resolved_str = str(artifact_file)
+    if any(resolved_str.startswith(p) for p in forbidden_prefixes):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied.")
+
+    import mimetypes
+    from fastapi.responses import FileResponse
+
+    mime_type, _ = mimetypes.guess_type(resolved_str)
+    return FileResponse(
+        path=resolved_str,
+        media_type=mime_type or "application/octet-stream",
+        filename=artifact_file.name,
+    )
 
 
 # --- System Auth Guard Endpoints ---

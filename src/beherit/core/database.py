@@ -37,10 +37,19 @@ class DatabaseManager:
                     duration_seconds REAL DEFAULT 0.0,
                     summary TEXT,
                     error_message TEXT,
-                    report_path TEXT
+                    report_path TEXT,
+                    artifacts TEXT DEFAULT '[]'
                 );
                 """
             )
+            # Ensure artifacts column exists if table was created in an earlier migration
+            cursor = conn.execute("PRAGMA table_info(job_history);")
+            columns = [row["name"] for row in cursor.fetchall()]
+            if "artifacts" not in columns:
+                try:
+                    conn.execute("ALTER TABLE job_history ADD COLUMN artifacts TEXT DEFAULT '[]';")
+                except Exception:
+                    pass
             conn.execute(
                 """
                 CREATE TABLE IF NOT EXISTS chat_sessions (
@@ -206,14 +215,16 @@ class DatabaseManager:
         summary: str | None = None,
         error_message: str | None = None,
         report_path: str | None = None,
+        artifacts: list[dict[str, Any]] | None = None,
     ) -> int:
         """Record a completed job execution."""
         executed_at = time.time()
+        artifacts_json = json.dumps(artifacts or [])
         with self._get_connection() as conn:
             cursor = conn.execute(
                 """
-                INSERT INTO job_history (agent_slug, status, executed_at, duration_seconds, summary, error_message, report_path)
-                VALUES (?, ?, ?, ?, ?, ?, ?)
+                INSERT INTO job_history (agent_slug, status, executed_at, duration_seconds, summary, error_message, report_path, artifacts)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     agent_slug,
@@ -223,17 +234,31 @@ class DatabaseManager:
                     summary,
                     error_message,
                     report_path,
+                    artifacts_json,
                 ),
             )
             conn.commit()
             return cursor.lastrowid
+
+    def _parse_job_row(self, row: sqlite3.Row) -> dict[str, Any]:
+        """Convert a job_history row into a dictionary with deserialized artifacts."""
+        data = dict(row)
+        raw_artifacts = data.get("artifacts")
+        if raw_artifacts and isinstance(raw_artifacts, str):
+            try:
+                data["artifacts"] = json.loads(raw_artifacts)
+            except Exception:
+                data["artifacts"] = []
+        elif not isinstance(data.get("artifacts"), list):
+            data["artifacts"] = []
+        return data
 
     def get_agent_history(self, agent_slug: str, limit: int = 50) -> list[dict[str, Any]]:
         """Return history for a specific agent."""
         with self._get_connection() as conn:
             cursor = conn.execute(
                 """
-                SELECT id, agent_slug, status, executed_at, duration_seconds, summary, error_message, report_path
+                SELECT id, agent_slug, status, executed_at, duration_seconds, summary, error_message, report_path, artifacts
                 FROM job_history
                 WHERE agent_slug = ?
                 ORDER BY executed_at DESC
@@ -241,18 +266,18 @@ class DatabaseManager:
                 """,
                 (agent_slug, limit),
             )
-            return [dict(row) for row in cursor.fetchall()]
+            return [self._parse_job_row(row) for row in cursor.fetchall()]
 
     def get_recent_history(self, limit: int = 50) -> list[dict[str, Any]]:
         """Return global recent history."""
         with self._get_connection() as conn:
             cursor = conn.execute(
                 """
-                SELECT id, agent_slug, status, executed_at, duration_seconds, summary, error_message, report_path
+                SELECT id, agent_slug, status, executed_at, duration_seconds, summary, error_message, report_path, artifacts
                 FROM job_history
                 ORDER BY executed_at DESC
                 LIMIT ?
                 """,
                 (limit,),
             )
-            return [dict(row) for row in cursor.fetchall()]
+            return [self._parse_job_row(row) for row in cursor.fetchall()]

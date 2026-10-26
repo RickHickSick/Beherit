@@ -1,0 +1,24 @@
+Baza wiedzy agenta:
+
+Błąd wgrywania: this.authHeaders is not a function > przy próbie wgrania pdf / jpg > chyab funkcja nie działa
+
+Dodaj Link / Wideo YT > działa dodawanie linków ale trzeba tam wpisać tytuł > lepiej jakby pobierało tytuł z linku + zapisuje to jako pliki .md z metadanymi > jak dla mnie w porządku o ile działa prawidłowo
+
+Eydcja agenta: jest tam możliwość ustawienia opisu agenta. powinna być ona także przy tworzeniu agenta (to samo pole).
+
+model silnika tam także powinien być wybierany z listy rozwijalnej. trzeba zaimplementować jakąś funkcje, ktora bedzie odswiezac obecnei wykorzystywane modele w danej subskrypcji.
+
+jest tam opcja Serwery MCP (Model Context Protocol - JSON) - co ona robi, co to jest, jak z tego korzystać? 
+
+ja też opcja harmonogramu w crone > ale co ona właściwie zrobi? rozumiem, że uruchomi agenta ale skąd ja mam wiedzieć, co on dokładnie zrobi? 
+
+
+Jest opcja uruchamiania agenta w zakładce "Agenci" > przycisk "Uruchom" > ale też nie wiem co to dokładnie zrobi. powinna być gdzieś opcja edycji agenta, która da nam dodatkowe pole do opisu tego co agent ma zrobić, kiedy zostanie "uruchomiony" w ten sposób, bez żadnego dodatkowego imputu.
+
+
+jest też taka zakładka raporty ale nie bardzo rozumiem jej działanie. rozumiem, że to są raporty z uruchomienia agenta własnie w ten sposób? Czy to beda tez raporty z czatów? z uruchomień przez input? gdzie one sie zaposuja? Jak wygladają?
+
+
+i ważne dla mnie - jak zrobimy takiego agenta - super, ale powiedz mi, jak ja mam teraz go ustawić, żeby on coś robił? Żeby dostał input i zaczął działać? Skąd mam wiedzieć jak przkeirować input, dajmy na to z n8n do konkrtnego, utworzonego agenta? Jak to zrobić? czy wyniki beda gdzies logowane / raportowane? co jeśli będzie jakiś błąd? czy agenci podłączeni są do bazy danych i wyrzucają jakieś logi? Czy wszystko jest w plikach md? jak to działa? 
+
+zastanów się dobrze, bo chciałbym żeby po utworzeniu takiego agenta, łatwo można było do niego podpiąć jakiś input i żeby wykonywał outpout we wskazanym miejscu. 

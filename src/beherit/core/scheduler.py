@@ -139,6 +139,7 @@ class AgentScheduler:
 
         # Save to destination file if specified (BEH-048)
         saved_destination = None
+        job_artifacts: list[dict[str, Any]] = []
         if destination_file:
             try:
                 agent_dir = Path(agent.file_path).parent if agent.file_path else (self.repo.base_dir / agent_slug)
@@ -157,10 +158,29 @@ class AgentScheduler:
                 else:
                     dest_path.write_text(full_output, encoding="utf-8")
                 saved_destination = str(dest_path.resolve())
+
+                # Register saved destination as an artifact
+                from urllib.parse import quote
+                ext = dest_path.suffix.lower()
+                art_type = "file"
+                if ext in [".png", ".jpg", ".jpeg", ".gif", ".svg", ".webp"]:
+                    art_type = "image"
+                elif ext in [".mp4", ".webm", ".mkv", ".mov"]:
+                    art_type = "video"
+                elif ext in [".pdf", ".csv", ".json", ".md", ".txt"]:
+                    art_type = "document"
+
+                job_artifacts.append({
+                    "name": dest_path.name,
+                    "path": saved_destination,
+                    "type": art_type,
+                    "size_bytes": dest_path.stat().st_size,
+                    "url": f"/api/reports/artifact?path={quote(saved_destination)}",
+                })
             except Exception as e:
                 logger.warning(f"Failed to write destination_file {destination_file}: {e}")
 
-        # Multi-channel reporting dispatch
+        # Multi-channel reporting dispatch (BEH-047)
         reporting_results: dict[str, Any] = {}
         if save_report:
             reporting_results = await self.reporter.dispatch(
@@ -169,6 +189,8 @@ class AgentScheduler:
                 duration_seconds=duration,
                 output_text=full_output,
                 error_message=error_msg,
+                artifacts=job_artifacts,
+                start_time=start_time,
             )
 
         # Notify outbound callback webhook if specified (e.g. n8n webhook)
@@ -184,6 +206,7 @@ class AgentScheduler:
                     "error": error_msg,
                     "saved_destination": saved_destination,
                     "report_file": reporting_results.get("markdown_path"),
+                    "artifacts": reporting_results.get("artifacts", job_artifacts),
                     "job_source": job_source,
                     "timestamp": datetime.datetime.now().isoformat(),
                 }
@@ -201,6 +224,7 @@ class AgentScheduler:
             "error": error_msg,
             "saved_destination": saved_destination,
             "report_path": reporting_results.get("markdown_path") if save_report else None,
+            "artifacts": reporting_results.get("artifacts", job_artifacts),
             "reporting": reporting_results,
             "callback_sent": callback_sent,
             "summary": full_output[:300],
