@@ -234,12 +234,39 @@
                   <span>Klucz / Połączenie</span>
                 </button>
 
-                <button @click="runAgentNow(agent)"
-                        :disabled="runningAgentSlug === agent.slug"
-                        :title="'Uruchom zadanie autonomiczne: ' + ((agent.schedule && agent.schedule.prompt) ? agent.schedule.prompt : 'Domyślny audyt agenta')"
-                        class="text-xs bg-slate-800 hover:bg-slate-700 disabled:opacity-50 text-amber-300 font-medium px-2.5 py-1.5 rounded-xl transition flex items-center gap-1 group">
-                  <span x-text="runningAgentSlug === agent.slug ? '⏳ Praca...' : '⚡ Uruchom'"></span>
-                </button>
+                <!-- Split Button Run (BEH-046) -->
+                <div class="relative inline-flex items-center" x-data="{ openRunMenu: false }">
+                  <button @click="runAgentNow(agent)"
+                          :disabled="runningAgentSlug === agent.slug"
+                          :title="'Uruchom domyślne zadanie: ' + ((agent.schedule && agent.schedule.prompt) ? agent.schedule.prompt : 'Domyślny audyt agenta')"
+                          class="text-xs bg-slate-800 hover:bg-slate-700 disabled:opacity-50 text-amber-300 font-medium px-2 py-1.5 rounded-l-xl transition flex items-center gap-1 border-r border-slate-700/60">
+                    <span x-text="runningAgentSlug === agent.slug ? '⏳...' : '⚡ Uruchom'"></span>
+                  </button>
+                  <button @click="openRunMenu = !openRunMenu; haptic();"
+                          class="text-xs bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-amber-300 px-1.5 py-1.5 rounded-r-xl transition flex items-center">
+                    <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+                  </button>
+                  <!-- Dropdown Menu -->
+                  <div x-show="openRunMenu" 
+                       @click.away="openRunMenu = false" 
+                       class="absolute left-0 top-full mt-1.5 w-64 bg-slate-900 border border-slate-700 rounded-xl shadow-2xl py-1 z-30 text-xs custom-scroll max-h-56 overflow-y-auto"
+                       style="display: none;">
+                    <div class="px-2.5 py-1 text-[10px] font-semibold text-slate-400 uppercase tracking-wider border-b border-slate-800">Wybierz zadanie do uruchomienia:</div>
+                    <button @click="openRunMenu = false; runAgentNow(agent);" class="w-full text-left px-3 py-1.5 hover:bg-slate-800 text-slate-200 flex items-center justify-between">
+                      <span class="truncate">⚡ Domyślny audyt / prompt</span>
+                    </button>
+                    <template x-for="job in ((agent.schedule && agent.schedule.jobs) || [])" :key="job.id">
+                      <button @click="openRunMenu = false; runAgentJob(agent, job);" class="w-full text-left px-3 py-1.5 hover:bg-slate-800 text-amber-300 flex items-center justify-between">
+                        <span class="truncate" x-text="'⏱️ ' + job.name"></span>
+                        <span class="text-[10px] font-mono text-slate-400 ml-1" x-text="job.cron"></span>
+                      </button>
+                    </template>
+                    <div class="border-t border-slate-800 my-1"></div>
+                    <button @click="openRunMenu = false; openPromptRunModalFor(agent);" class="w-full text-left px-3 py-1.5 hover:bg-slate-800 text-sky-400 flex items-center gap-1.5">
+                      <span>✍️</span> Wpisz własny prompt ad-hoc...
+                    </button>
+                  </div>
+                </div>
 
                 <button @click="selectAgentForChat(agent)" 
                         class="text-xs bg-emerald-600 hover:bg-emerald-500 text-slate-950 font-bold px-3 py-1.5 rounded-xl transition flex items-center gap-1">
@@ -248,11 +275,16 @@
                 </button>
               </div>
 
-              <!-- Secondary Row: Knowledge, Edit & Delete -->
+              <!-- Secondary Row: Knowledge, Webhook/n8n, Edit & Delete -->
               <div class="flex items-center justify-between text-xs pt-1 border-t border-slate-800/40">
-                <button @click="openKnowledgeModalFor(agent)" class="text-slate-400 hover:text-emerald-400 px-1 py-1 rounded transition flex items-center gap-1">
-                  📚 Baza wiedzy
-                </button>
+                <div class="flex items-center gap-2">
+                  <button @click="openKnowledgeModalFor(agent)" class="text-slate-400 hover:text-emerald-400 px-1 py-1 rounded transition flex items-center gap-1">
+                    📚 Baza wiedzy
+                  </button>
+                  <button @click="openIntegrationModalFor(agent)" class="text-slate-400 hover:text-sky-400 px-1 py-1 rounded transition flex items-center gap-1" title="Integracja Webhook / n8n">
+                    🔌 n8n / API
+                  </button>
+                </div>
                 <div class="flex items-center gap-2">
                   <button @click="openEditModalFor(agent)" class="text-slate-400 hover:text-slate-200 px-1 py-1 rounded transition flex items-center gap-1">
                     ✏️ Edytuj
@@ -681,28 +713,69 @@
           </select>
         </div>
 
-        <!-- Zadanie autonomiczne i harmonogram Cron (BEH-042) -->
+        <!-- Zadanie autonomiczne i harmonogramy Multi-Cron (BEH-042, BEH-045) -->
         <div class="p-3.5 bg-slate-950/80 rounded-xl border border-slate-800 space-y-3">
           <div>
-            <label class="block text-xs font-semibold text-slate-200 mb-0.5">Domyślne Zadanie Autonomiczne (Prompt dla „⚡ Uruchom” i Harmonogramu)</label>
-            <p class="text-[11px] text-slate-400 mb-1.5">Polecenie wykonywane przez agenta po kliknięciu przycisku <em>⚡ Uruchom</em> na kafelku lub w zaplanowanych godzinach. Wynik zapisuje się w zakładce Raporty oraz pliku <code>reports/*.md</code>.</p>
+            <label class="block text-xs font-semibold text-slate-200 mb-0.5">Domyślne Zadanie Autonomiczne (Prompt dla „⚡ Uruchom”)</label>
+            <p class="text-[11px] text-slate-400 mb-1.5">Domyślne polecenie wykonywane przez agenta po kliknięciu przycisku <em>⚡ Uruchom</em> na kafelku lub w zaplanowanych godzinach. Wynik trafia do zakładki Raporty oraz pliku <code>reports/*.md</code>.</p>
             <textarea x-model="editAgent.schedule_prompt" rows="2" placeholder="np. Wykonaj zaplanowany audyt, sprawdź nowe dokumenty w bazie wiedzy i przygotuj zwięzłe podsumowanie." class="w-full bg-slate-800 text-slate-100 px-3.5 py-2 rounded-xl border border-slate-700 outline-none text-xs focus:border-emerald-500"></textarea>
           </div>
 
-          <div class="pt-2 border-t border-slate-800/80">
+          <div class="pt-2 border-t border-slate-800/80 space-y-2">
             <div class="flex items-center justify-between">
               <div>
-                <label class="text-xs font-semibold text-slate-200 block">Harmonogram Automatyczny (Cron)</label>
-                <p class="text-[11px] text-slate-400">Cykliczne uruchamianie powyższego zadania w tle bez udziału użytkownika.</p>
+                <label class="text-xs font-semibold text-slate-200 block">Harmonogramy Cykliczne (Multi-Cron)</label>
+                <p class="text-[11px] text-slate-400">Nielimitowane uruchomienia w tle o różnych porach z osobnymi promptami.</p>
               </div>
               <label class="relative inline-flex items-center cursor-pointer">
                 <input type="checkbox" x-model="editAgent.schedule_enabled" class="sr-only peer">
                 <div class="w-9 h-5 bg-slate-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-emerald-600"></div>
               </label>
             </div>
-            <div x-show="editAgent.schedule_enabled" class="space-y-1.5 pt-2">
-              <label class="block text-[11px] text-slate-300 mb-0.5">Wyrażenie Cron (np. co godzinę: <code>0 * * * *</code>, codziennie o 8:00: <code>0 8 * * *</code>)</label>
-              <input type="text" x-model="editAgent.schedule_cron" placeholder="0 8 * * *" class="w-full bg-slate-800 text-slate-100 px-3 py-2 rounded-lg border border-slate-700 outline-none font-mono text-xs">
+
+            <div x-show="editAgent.schedule_enabled" class="space-y-3 pt-2">
+              <div>
+                <label class="block text-[11px] text-slate-300 mb-0.5">Domyślne Wyrażenie Cron (np. <code>0 8 * * *</code>)</label>
+                <input type="text" x-model="editAgent.schedule_cron" placeholder="0 8 * * *" class="w-full bg-slate-800 text-slate-100 px-3 py-1.5 rounded-lg border border-slate-700 outline-none font-mono text-xs">
+              </div>
+
+              <!-- Lista dodatkowych zadań Multi-Cron -->
+              <div class="space-y-2">
+                <template x-for="(job, index) in (editAgent.schedule_jobs || [])" :key="job.id || index">
+                  <div class="p-3 bg-slate-900 border border-slate-800 rounded-xl space-y-2 relative">
+                    <div class="flex items-center justify-between gap-2">
+                      <input type="text" x-model="job.name" placeholder="Nazwa zadania (np. Poranny raport rynkowy)" class="bg-slate-800 text-slate-100 font-semibold px-2.5 py-1 rounded-lg border border-slate-700 outline-none text-xs flex-1">
+                      <div class="flex items-center gap-2">
+                        <label class="text-[10px] text-slate-400 flex items-center gap-1 cursor-pointer">
+                          <input type="checkbox" x-model="job.enabled" class="rounded bg-slate-800 border-slate-700 text-emerald-500">
+                          <span>Aktywne</span>
+                        </label>
+                        <button type="button" @click="removeScheduleJob(index)" class="text-red-400 hover:text-red-300 text-xs px-1 font-bold">✕</button>
+                      </div>
+                    </div>
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                      <div>
+                        <label class="block text-[10px] text-slate-400 mb-0.5">Wyrażenie Cron (np. <code>0 14 * * 1-5</code>)</label>
+                        <input type="text" x-model="job.cron" placeholder="0 14 * * 1-5" class="w-full bg-slate-800 text-slate-100 px-2.5 py-1 rounded-lg border border-slate-700 outline-none font-mono text-xs">
+                      </div>
+                      <div>
+                        <label class="block text-[10px] text-slate-400 mb-0.5">Plik zapisu (np. <code>Raporty/dzienny.md</code>)</label>
+                        <input type="text" x-model="job.destination_file" placeholder="Opcjonalny plik docelowy" class="w-full bg-slate-800 text-slate-100 px-2.5 py-1 rounded-lg border border-slate-700 outline-none text-xs">
+                      </div>
+                    </div>
+                    <div>
+                      <label class="block text-[10px] text-slate-400 mb-0.5">Dedykowany Prompt dla tego harmonogramu:</label>
+                      <textarea x-model="job.prompt" rows="2" placeholder="Wpisz instrukcję dla tego konkretnego uruchomienia..." class="w-full bg-slate-800 text-slate-100 px-2.5 py-1 rounded-lg border border-slate-700 outline-none text-xs"></textarea>
+                    </div>
+                  </div>
+                </template>
+              </div>
+
+              <button type="button" 
+                      @click="addScheduleJob()" 
+                      class="text-xs bg-slate-900 hover:bg-slate-800 border border-slate-700 border-dashed text-emerald-400 font-semibold px-3 py-2 rounded-xl w-full flex items-center justify-center gap-1.5 transition">
+                <span>➕</span> Dodaj kolejne zaplanowane zadanie Cron
+              </button>
             </div>
           </div>
         </div>
@@ -1179,6 +1252,109 @@
     </div>
   </div>
 
+  <!-- MODAL: INTEGRACJA WEBHOOK & N8N (BEH-049) -->
+  <div x-show="openIntegrationModal" class="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4" style="display: none;">
+    <div @click.away="openIntegrationModal = false" class="bg-slate-900 border border-slate-800 w-full max-w-2xl rounded-2xl p-6 shadow-2xl space-y-4 max-h-[90vh] flex flex-col">
+      <div class="flex items-center justify-between border-b border-slate-800 pb-3">
+        <div>
+          <h3 class="text-base font-bold text-slate-100 flex items-center gap-2">
+            <span>🔌</span> Integracja Zewnętrzna: Webhook & n8n
+          </h3>
+          <p class="text-xs text-slate-400">Steruj agentem <span class="text-emerald-400 font-bold" x-text="integrationTargetAgent ? integrationTargetAgent.name : ''"></span> z n8n lub zewnętrznych workflow.</p>
+        </div>
+        <button @click="openIntegrationModal = false" class="text-slate-400 hover:text-slate-200">✕</button>
+      </div>
+
+      <div class="flex-1 overflow-y-auto space-y-4 custom-scroll pr-1">
+        <!-- Webhook URL Box -->
+        <div class="p-3.5 bg-slate-950/80 rounded-xl border border-slate-800 space-y-1.5">
+          <label class="block text-xs font-semibold text-slate-300">Endpoint Webhooka REST API:</label>
+          <div class="flex items-center gap-2">
+            <input type="text" readonly :value="getWebhookUrl()" class="flex-1 bg-slate-800 text-emerald-400 px-3 py-2 rounded-xl border border-slate-700 font-mono text-xs outline-none select-all">
+            <button @click="copyToClipboard(getWebhookUrl(), 'Skopiowano URL webhooka')" class="bg-slate-800 hover:bg-slate-700 text-slate-200 px-3 py-2 rounded-xl text-xs font-medium border border-slate-700 transition">Kopiuj URL</button>
+          </div>
+        </div>
+
+        <!-- n8n Node Preset -->
+        <div class="p-4 bg-slate-950/80 rounded-xl border border-slate-800 space-y-3">
+          <div class="flex items-center justify-between">
+            <h4 class="text-xs font-bold text-sky-400 flex items-center gap-1.5">
+              <span>⚡</span> Konfiguracja w n8n (Węzeł HTTP Request)
+            </h4>
+            <button @click="copyToClipboard(getN8nNodeJson(), 'Skopiowano szablon węzła n8n')" class="text-xs bg-sky-950/70 hover:bg-sky-900 border border-sky-500/40 text-sky-300 font-bold px-3 py-1.5 rounded-xl transition flex items-center gap-1">
+              <span>📋</span> Kopiuj węzeł n8n (Ctrl+V)
+            </button>
+          </div>
+          <p class="text-xs text-slate-400">Wklej powyższy schemat bezpośrednio na płótno edytora <strong>n8n</strong> (<code>Ctrl + V</code>), a węzeł skonfiguruje się automatycznie!</p>
+          <div class="bg-slate-900 p-3 rounded-lg border border-slate-800 font-mono text-[11px] text-slate-300 space-y-1">
+            <div class="text-slate-400">// Przykładowy payload żądania z n8n:</div>
+            <pre class="text-emerald-400 custom-scroll overflow-x-auto" x-text="getN8nPayloadExample()"></pre>
+          </div>
+        </div>
+
+        <!-- cURL Preset -->
+        <div class="p-4 bg-slate-950/80 rounded-xl border border-slate-800 space-y-2">
+          <div class="flex items-center justify-between">
+            <h4 class="text-xs font-bold text-slate-300 flex items-center gap-1.5">
+              <span>💻</span> Polecenie cURL (Terminal / Skrypt Bash)
+            </h4>
+            <button @click="copyToClipboard(getCurlCommand(), 'Skopiowano polecenie cURL')" class="text-xs bg-slate-800 hover:bg-slate-700 text-slate-200 px-3 py-1.5 rounded-xl border border-slate-700 transition">
+              Kopiuj cURL
+            </button>
+          </div>
+          <pre class="bg-slate-900 p-3 rounded-lg border border-slate-800 font-mono text-[11px] text-amber-300 overflow-x-auto custom-scroll" x-text="getCurlCommand()"></pre>
+        </div>
+
+        <!-- Interactive Webhook Test Box -->
+        <div class="p-4 bg-slate-950/80 rounded-xl border border-emerald-950 space-y-3">
+          <h4 class="text-xs font-bold text-emerald-400 flex items-center gap-1.5">
+            <span>🧪</span> Przetestuj Wywołanie Webhooka na Żywo
+          </h4>
+          <div>
+            <label class="block text-[11px] text-slate-400 mb-1">Polecenie testowe (prompt):</label>
+            <input type="text" x-model="testWebhookPrompt" placeholder="np. Wymień 3 kluczowe zasady bezpiecznego kodowania" class="w-full bg-slate-800 text-slate-100 px-3 py-2 rounded-xl border border-slate-700 outline-none text-xs focus:border-emerald-500">
+          </div>
+          <div class="flex justify-end">
+            <button @click="executeTestWebhook()" :disabled="isTestingWebhook || !testWebhookPrompt.trim()" class="bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-slate-950 font-bold px-4 py-2 rounded-xl text-xs transition flex items-center gap-1.5">
+              <span x-text="isTestingWebhook ? '⏳ Wykonywanie...' : '🚀 Wyślij do Agenta'"></span>
+            </button>
+          </div>
+          <div x-show="testWebhookResult" class="space-y-1">
+            <label class="block text-[10px] text-slate-400">Odpowiedź JSON z Beherita:</label>
+            <pre class="bg-slate-900 p-3 rounded-lg border border-slate-800 font-mono text-[11px] text-slate-200 max-h-40 overflow-y-auto custom-scroll" x-text="testWebhookResult"></pre>
+          </div>
+        </div>
+      </div>
+
+      <div class="pt-2 border-t border-slate-800 flex justify-end">
+        <button @click="openIntegrationModal = false" class="bg-slate-800 hover:bg-slate-700 text-slate-200 px-4 py-1.5 rounded-xl text-xs font-semibold">Zamknij</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: PROMPT AD-HOC RUNNER (BEH-046) -->
+  <div x-show="openPromptRunModal" class="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4" style="display: none;">
+    <div @click.away="openPromptRunModal = false" class="bg-slate-900 border border-slate-800 w-full max-w-lg rounded-2xl p-6 shadow-2xl space-y-4">
+      <div class="flex items-center justify-between border-b border-slate-800 pb-3">
+        <div>
+          <h3 class="text-base font-bold text-slate-100 flex items-center gap-2">
+            <span>✍️</span> Uruchomienie z Własnym Promptem: <span class="text-amber-300" x-text="promptRunAgent ? promptRunAgent.name : ''"></span>
+          </h3>
+          <p class="text-xs text-slate-400">Wpisz jednorazowe polecenie. Wynik zostanie zapisany w zakładce Raporty.</p>
+        </div>
+        <button @click="openPromptRunModal = false" class="text-slate-400 hover:text-slate-200">✕</button>
+      </div>
+      <div>
+        <label class="block text-xs font-semibold text-slate-300 mb-1">Polecenie dla Agenta:</label>
+        <textarea x-model="adHocPromptText" rows="4" placeholder="Wpisz treść zadania, które agent ma natychmiast wykonać..." class="w-full bg-slate-800 text-slate-100 p-3 rounded-xl border border-slate-700 outline-none text-xs focus:border-amber-400"></textarea>
+      </div>
+      <div class="pt-2 border-t border-slate-800 flex justify-end gap-2">
+        <button @click="openPromptRunModal = false" class="px-4 py-2 rounded-xl text-slate-400 hover:text-slate-200 text-xs">Anuluj</button>
+        <button @click="submitAdHocRun()" :disabled="!adHocPromptText.trim()" class="bg-amber-400 hover:bg-amber-300 disabled:opacity-50 text-slate-950 font-bold px-5 py-2 rounded-xl text-xs transition">⚡ Uruchom i Zapisz Raport</button>
+      </div>
+    </div>
+  </div>
+
   <script>
     function beheritApp() {
       return {
@@ -1257,10 +1433,23 @@
           schedule_enabled: false,
           schedule_cron: '0 8 * * *',
           schedule_prompt: '',
+          schedule_jobs: [],
           mcp_servers_json: '',
           master_prompt: '',
           instructions: ''
         },
+
+        // Integration & Webhook Modal (BEH-049)
+        openIntegrationModal: false,
+        integrationTargetAgent: null,
+        testWebhookPrompt: 'Przeanalizuj bieżący status i wygeneruj 3 kluczowe wnioski.',
+        isTestingWebhook: false,
+        testWebhookResult: '',
+
+        // Prompt Run Modal (BEH-046)
+        openPromptRunModal: false,
+        promptRunAgent: null,
+        adHocPromptText: '',
 
         // Knowledge Base Modal
         openKnowledgeModal: false,
@@ -1741,11 +1930,32 @@
             schedule_enabled: !!(agent.schedule && agent.schedule.enabled),
             schedule_cron: (agent.schedule && agent.schedule.cron) || '0 8 * * *',
             schedule_prompt: (agent.schedule && agent.schedule.prompt) || '',
+            schedule_jobs: (agent.schedule && agent.schedule.jobs && Array.isArray(agent.schedule.jobs))
+              ? JSON.parse(JSON.stringify(agent.schedule.jobs))
+              : [],
             mcp_servers_json: mcpJsonStr,
             master_prompt: agent.master_prompt || '',
             instructions: agent.instructions || ''
           };
           this.openEditModal = true;
+        },
+
+        addScheduleJob() {
+          if (!this.editAgent.schedule_jobs) this.editAgent.schedule_jobs = [];
+          this.editAgent.schedule_jobs.push({
+            id: `job_${Date.now() % 1000000}`,
+            name: `Zadanie ${this.editAgent.schedule_jobs.length + 1}`,
+            cron: '0 8 * * *',
+            prompt: 'Wykonaj zaplanowane zadanie i sporządź raport.',
+            enabled: true,
+            destination_file: ''
+          });
+        },
+
+        removeScheduleJob(index) {
+          if (this.editAgent.schedule_jobs) {
+            this.editAgent.schedule_jobs.splice(index, 1);
+          }
         },
 
         onEditAgentEngineChange() {
@@ -1801,7 +2011,8 @@
               schedule: {
                 enabled: this.editAgent.schedule_enabled,
                 cron: this.editAgent.schedule_cron,
-                prompt: this.editAgent.schedule_prompt
+                prompt: this.editAgent.schedule_prompt,
+                jobs: this.editAgent.schedule_jobs || []
               }
             };
 
@@ -2159,6 +2370,154 @@
             alert(`Błąd sieci: ${e.message}`);
           } finally {
             this.runningAgentSlug = null;
+          }
+        },
+
+        async runAgentJob(agent, job) {
+          this.haptic();
+          this.runningAgentSlug = agent.slug;
+          this.showToast(`Uruchamianie zadania "${job.name}"...`);
+
+          try {
+            const res = await this.apiFetch(`/api/agents/${agent.slug}/run-now?job_id=${encodeURIComponent(job.id)}`, {
+              method: 'POST'
+            });
+
+            if (res.ok) {
+              const data = await res.json();
+              this.showToast(`Zadanie "${job.name}" zakończone (${data.duration ? data.duration.toFixed(1) + 's' : 'Sukces'}). Sprawdź Raporty.`);
+              await this.loadHistory();
+            } else {
+              const err = await res.json();
+              alert(`Błąd uruchomienia: ${err.detail || 'Błąd'}`);
+            }
+          } catch (e) {
+            alert(`Błąd sieci: ${e.message}`);
+          } finally {
+            this.runningAgentSlug = null;
+          }
+        },
+
+        openPromptRunModalFor(agent) {
+          this.promptRunAgent = agent;
+          this.adHocPromptText = '';
+          this.openPromptRunModal = true;
+        },
+
+        async submitAdHocRun() {
+          if (!this.promptRunAgent || !this.adHocPromptText.trim()) return;
+          this.haptic();
+          const agent = this.promptRunAgent;
+          const prompt = this.adHocPromptText.trim();
+          this.openPromptRunModal = false;
+          this.runningAgentSlug = agent.slug;
+          this.showToast(`Uruchamianie promptu ad-hoc dla ${agent.name}...`);
+
+          try {
+            const res = await this.apiFetch(`/api/agents/${agent.slug}/run`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ prompt: prompt, save_report: true })
+            });
+
+            if (res.ok) {
+              const data = await res.json();
+              this.showToast(`Zadanie ad-hoc zakończone (${data.duration ? data.duration.toFixed(1) + 's' : 'Sukces'}). Zapisano raport.`);
+              await this.loadHistory();
+            } else {
+              const err = await res.json();
+              alert(`Błąd: ${err.detail || 'Nie udało się wykonać zadania'}`);
+            }
+          } catch (e) {
+            alert(`Błąd sieci: ${e.message}`);
+          } finally {
+            this.runningAgentSlug = null;
+          }
+        },
+
+        openIntegrationModalFor(agent) {
+          this.integrationTargetAgent = agent;
+          this.testWebhookResult = '';
+          this.openIntegrationModal = true;
+        },
+
+        getWebhookUrl() {
+          if (!this.integrationTargetAgent) return '';
+          const origin = window.location.origin;
+          return `${origin}/api/agents/${this.integrationTargetAgent.slug}/run`;
+        },
+
+        getCurlCommand() {
+          if (!this.integrationTargetAgent) return '';
+          const url = this.getWebhookUrl();
+          return `curl -X POST "${url}" \\\n  -H "Content-Type: application/json" \\\n  -d '{\n    "prompt": "Przeanalizuj bieżący stan i wygeneruj podsumowanie",\n    "save_report": true,\n    "destination_file": "Raporty/wynik.md"\n  }'`;
+        },
+
+        getN8nPayloadExample() {
+          return `{\n  "prompt": "Zanalizuj treść zgłoszenia: {{ $json.body }}",\n  "context": {\n    "source": "n8n_workflow",\n    "ticket_id": "{{ $json.id }}"\n  },\n  "destination_file": "Notatki/Klienci/raport.md",\n  "save_report": true\n}`;
+        },
+
+        getN8nNodeJson() {
+          if (!this.integrationTargetAgent) return '';
+          const url = this.getWebhookUrl();
+          const node = {
+            "nodes": [
+              {
+                "parameters": {
+                  "method": "POST",
+                  "url": url,
+                  "sendBody": true,
+                  "specifyBody": "json",
+                  "jsonBody": "={\n  \"prompt\": \"Przeanalizuj poniższe dane: \" + JSON.stringify($json),\n  \"save_report\": true\n}",
+                  "options": {}
+                },
+                "id": "beherit-agent-node",
+                "name": `Beherit: ${this.integrationTargetAgent.name}`,
+                "type": "n8n-nodes-base.httpRequest",
+                "typeVersion": 4.2,
+                "position": [250, 300]
+              }
+            ],
+            "connections": {}
+          };
+          return JSON.stringify(node, null, 2);
+        },
+
+        copyToClipboard(text, msg) {
+          if (navigator.clipboard && navigator.clipboard.writeText) {
+            navigator.clipboard.writeText(text).then(() => {
+              this.showToast(msg || 'Skopiowano do schowka');
+            }).catch(() => {
+              prompt('Skopiuj poniższy tekst:', text);
+            });
+          } else {
+            prompt('Skopiuj poniższy tekst:', text);
+          }
+        },
+
+        async executeTestWebhook() {
+          if (!this.integrationTargetAgent || !this.testWebhookPrompt.trim()) return;
+          this.isTestingWebhook = true;
+          this.testWebhookResult = '';
+          this.haptic();
+
+          try {
+            const res = await this.apiFetch(`/api/agents/${this.integrationTargetAgent.slug}/run`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                prompt: this.testWebhookPrompt.trim(),
+                save_report: true
+              })
+            });
+            const data = await res.json();
+            this.testWebhookResult = JSON.stringify(data, null, 2);
+            this.showToast('Otrzymano odpowiedź webhooka!');
+            await this.loadHistory();
+          } catch (e) {
+            this.testWebhookResult = JSON.stringify({ error: e.message }, null, 2);
+          } finally {
+            this.isTestingWebhook = false;
           }
         },
 

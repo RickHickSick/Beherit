@@ -91,6 +91,16 @@ class FetchUrlMetadataRequest(BaseModel):
     url: str = Field(..., min_length=3, max_length=1000)
 
 
+class AgentRunRequest(BaseModel):
+    prompt: str = Field(..., min_length=1, description="Task prompt or instruction for the agent")
+    context: dict[str, Any] | list[Any] | str | None = Field(default=None, description="Optional extra data or payload from n8n")
+    destination_file: str | None = Field(default=None, description="Optional destination path to save output (e.g. in Obsidian vault)")
+    file_mode: str = Field(default="overwrite", description="'overwrite' or 'append'")
+    save_report: bool = Field(default=True, description="Whether to save to reports/ and history")
+    callback_url: str | None = Field(default=None, description="Optional outbound webhook URL (e.g. n8n webhook) to notify upon completion")
+    async_execution: bool = Field(default=False, description="Run asynchronously in background")
+
+
 async def scrape_link_metadata(url: str) -> dict[str, str]:
     """Fetch webpage title, description and category from URL or YouTube oEmbed."""
     import html
@@ -486,13 +496,73 @@ async def get_agent_job_history(slug: str, limit: int = 50):
 
 
 @router.post("/{slug}/run-now")
-async def trigger_agent_job_now(slug: str):
-    """Trigger an autonomous job run immediately on-demand and dispatch multi-channel reports."""
+async def trigger_agent_job_now(slug: str, job_id: str | None = None, prompt: str | None = None):
+    """Trigger an autonomous job run immediately on-demand and dispatch multi-channel reports (BEH-046)."""
     agent = repo.load_agent(slug)
     if not agent:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Agent not found.")
 
-    result = await scheduler.execute_agent_job(slug)
+    target_prompt = prompt
+    target_dest = None
+
+    if job_id and agent.schedule.jobs:
+        match_job = next((j for j in agent.schedule.jobs if j.id == job_id), None)
+        if match_job:
+            target_prompt = match_job.prompt or target_prompt
+            target_dest = match_job.destination_file
+
+    result = await scheduler.execute_agent_job(
+        agent_slug=slug,
+        custom_prompt=target_prompt,
+        destination_file=target_dest,
+    )
+    return result
+
+
+@router.post("/{slug}/run")
+async def run_agent_external(slug: str, payload: AgentRunRequest):
+    """Universal Webhook & REST API to trigger an agent from n8n, cURL, or external services (BEH-048)."""
+    agent = repo.load_agent(slug)
+    if not agent:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Agent not found.")
+
+    # Combine prompt with optional context payload if provided
+    final_prompt = payload.prompt.strip()
+    if payload.context is not None:
+        if isinstance(payload.context, (dict, list)):
+            ctx_str = json.dumps(payload.context, ensure_ascii=False, indent=2)
+        else:
+            ctx_str = str(payload.context).strip()
+        final_prompt = f"{final_prompt}\n\n### Dane Wejściowe (Context):\n```json\n{ctx_str}\n```"
+
+    if payload.async_execution:
+        asyncio.create_task(
+            scheduler.execute_agent_job(
+                agent_slug=slug,
+                custom_prompt=final_prompt,
+                destination_file=payload.destination_file,
+                file_mode=payload.file_mode,
+                save_report=payload.save_report,
+                callback_url=payload.callback_url,
+                job_source="webhook_n8n",
+            )
+        )
+        return {
+            "status": "accepted",
+            "message": f"Zadanie dla agenta {slug} zostało zakolejkowane w tle.",
+            "agent_slug": slug,
+            "async": True,
+        }
+
+    result = await scheduler.execute_agent_job(
+        agent_slug=slug,
+        custom_prompt=final_prompt,
+        destination_file=payload.destination_file,
+        file_mode=payload.file_mode,
+        save_report=payload.save_report,
+        callback_url=payload.callback_url,
+        job_source="webhook_n8n",
+    )
     return result
 
 

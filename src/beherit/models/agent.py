@@ -1,5 +1,6 @@
 """Pydantic Domain Models for Markdown-first Agent Definitions."""
 
+import time
 from datetime import date
 from enum import Enum
 
@@ -61,11 +62,22 @@ class ScheduleReporting(BaseModel):
     telegram_on_error_only: bool = Field(default=True, description="Only notify on failures or anomalies")
 
 
+class ScheduledJob(BaseModel):
+    """Individual scheduled job entry in multi-cron schedule (BEH-045)."""
+    id: str = Field(default_factory=lambda: f"job_{int(time.time()*1000)%1000000}")
+    name: str = Field(default="Zadanie cykliczne", max_length=100)
+    cron: str = Field(default="0 8 * * *")
+    prompt: str = Field(default="", description="Dedicated prompt to execute for this schedule")
+    enabled: bool = Field(default=True)
+    destination_file: str | None = Field(default=None, description="Optional target file to save output")
+
+
 class AgentSchedule(BaseModel):
-    """Autonomous background execution schedule."""
+    """Autonomous background execution schedule supporting multi-cron."""
     enabled: bool = Field(default=False)
     cron: str | None = Field(default="0 8 * * *")
-    prompt: str | None = Field(default=None, description="Optional custom prompt for scheduled turn")
+    prompt: str | None = Field(default=None, description="Optional default prompt for autonomous turns")
+    jobs: list[ScheduledJob] = Field(default_factory=list, description="List of multiple scheduled jobs")
     reporting: ScheduleReporting = Field(default_factory=ScheduleReporting)
 
 
