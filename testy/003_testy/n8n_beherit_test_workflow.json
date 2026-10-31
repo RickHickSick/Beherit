@@ -1,4 +1,5 @@
 {
+  "id": "behTestWf001",
   "name": "Beherit AI Agent - Test Integracji i Dwukierunkowy Callback",
   "nodes": [
     {

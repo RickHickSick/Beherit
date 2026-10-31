@@ -77,6 +77,30 @@ class MCPServer:
                 }
             })
 
+        # Multi-Agent Delegation Tool (BEH-060)
+        tools.append({
+            "name": "call_agent",
+            "description": "Invoke another specialized AI agent in Beherit to delegate a subtask, consult domain expertise, or coordinate workflows.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "agent_slug": {
+                        "type": "string",
+                        "description": "The unique slug of the target agent to call (e.g. 'analityk-finansowy', 'devops-guard')"
+                    },
+                    "prompt": {
+                        "type": "string",
+                        "description": "The specific question, problem, or delegation instruction for the subagent"
+                    },
+                    "context": {
+                        "type": "object",
+                        "description": "Optional dictionary payload / data context to pass to the subagent"
+                    }
+                },
+                "required": ["agent_slug", "prompt"]
+            }
+        })
+
         return tools
 
     async def handle_request(self, message: dict[str, Any]) -> dict[str, Any] | None:

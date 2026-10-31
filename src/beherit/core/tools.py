@@ -224,6 +224,101 @@ class CapabilitiesGuard:
         except Exception as e:
             return {"success": False, "error": str(e)}
 
+    async def call_agent(
+        self,
+        caller_agent: AgentModel,
+        target_slug: str,
+        prompt: str,
+        context: dict[str, Any] | None = None,
+        call_stack: list[str] | None = None,
+    ) -> dict[str, Any]:
+        """
+        Invoke another agent in Beherit as a subagent / delegated collaborator (BEH-060).
+        Protects against infinite recursion and circular delegation.
+        """
+        import json
+
+        stack = list(call_stack or [])
+        if caller_agent.slug not in stack:
+            stack.append(caller_agent.slug)
+
+        if not target_slug or not target_slug.strip():
+            return {
+                "success": False,
+                "error": "Target agent slug must not be empty.",
+                "call_stack": stack,
+            }
+
+        if target_slug in stack:
+            return {
+                "success": False,
+                "error": f"Circular agent delegation rejected: {' -> '.join(stack)} -> {target_slug}",
+                "call_stack": stack,
+            }
+
+        if len(stack) >= 5:
+            return {
+                "success": False,
+                "error": f"Maximum subagent delegation depth exceeded (limit=5): {' -> '.join(stack)}",
+                "call_stack": stack,
+            }
+
+        from beherit.core.repository import AgentRepository
+        from beherit.engines import EngineRegistry
+
+        repo = AgentRepository(base_dir=self.default_workspace)
+        target_agent = repo.load_agent(target_slug)
+        if not target_agent:
+            return {
+                "success": False,
+                "error": f"Target agent '{target_slug}' not found.",
+                "call_stack": stack,
+            }
+
+        # Format prompt with optional context
+        final_prompt = prompt.strip()
+        if context:
+            ctx_str = json.dumps(context, ensure_ascii=False, indent=2)
+            final_prompt = f"{final_prompt}\n\n### Przekazany Kontekst (Delegation Context from {caller_agent.name}):\n```json\n{ctx_str}\n```"
+
+        stack.append(target_slug)
+
+        engine_registry = EngineRegistry()
+        engine = engine_registry.get_engine(target_agent.engine)
+
+        tokens: list[str] = []
+        error_msg: str | None = None
+
+        try:
+            async for chunk in engine.stream_chat(target_agent, final_prompt):
+                evt = chunk.get("event")
+                data = chunk.get("data")
+                if evt == "token":
+                    tokens.append(data if isinstance(data, str) else str(data))
+                elif evt == "error":
+                    error_msg = str(data)
+                    break
+        except Exception as e:
+            error_msg = str(e)
+
+        if error_msg:
+            return {
+                "success": False,
+                "target_agent": target_slug,
+                "error": f"Error executing subagent '{target_slug}': {error_msg}",
+                "call_stack": stack,
+            }
+
+        full_output = "".join(tokens).strip() or "Brak odpowiedzi od podagenta."
+        return {
+            "success": True,
+            "caller_agent": caller_agent.slug,
+            "target_agent": target_slug,
+            "target_agent_name": target_agent.name,
+            "output": full_output,
+            "call_stack": stack,
+        }
+
     async def dispatch_tool(
         self,
         agent: AgentModel,
@@ -245,8 +340,20 @@ class CapabilitiesGuard:
         elif tool_name == "list_dir":
             path = args.get("path", ".")
             return self.list_dir(agent, path)
+        elif tool_name == "call_agent":
+            target_slug = args.get("agent_slug") or args.get("slug", "")
+            prompt = args.get("prompt", "")
+            context = args.get("context")
+            call_stack = args.get("call_stack")
+            return await self.call_agent(
+                caller_agent=agent,
+                target_slug=target_slug,
+                prompt=prompt,
+                context=context,
+                call_stack=call_stack,
+            )
         else:
             return {
                 "success": False,
-                "error": f"Unknown tool '{tool_name}'. Available: execute_bash, read_file, write_file, list_dir",
+                "error": f"Unknown tool '{tool_name}'. Available: execute_bash, read_file, write_file, list_dir, call_agent",
             }

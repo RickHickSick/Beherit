@@ -35,6 +35,24 @@ class BaseAgentEngine(ABC):
                 mcp_items.append(f"- **{name}**: `{cfg.command} {' '.join(cfg.args)}`")
             parts.append("## Dostępne Narzędzia MCP (Model Context Protocol)\n" + "\n".join(mcp_items))
 
+        # Add available peer agents for delegation (BEH-060)
+        try:
+            from beherit.core.repository import AgentRepository
+            repo = AgentRepository()
+            other_agents = [a for a in repo.list_agents() if a.slug != agent.slug]
+            if other_agents:
+                agent_items = [
+                    f"- **{a.name}** (slug: `{a.slug}`): {a.description or 'Wyspecjalizowany agent pomocniczy'}"
+                    for a in other_agents
+                ]
+                parts.append(
+                    "## Dostępni Agenci do Współpracy (Narzędzie call_agent)\n"
+                    "Posiadasz możliwość delegowania podzadań do innych zarejestrowanych agentów Beherit za pomocą narzędzia `call_agent(agent_slug, prompt, context)`:\n"
+                    + "\n".join(agent_items)
+                )
+        except Exception:
+            pass
+
         return "\n\n".join(parts)
 
     @abstractmethod
