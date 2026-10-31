@@ -14,6 +14,7 @@ from beherit.api.routes import (
     auth_guard_router,
     history_router,
     knowledge_router,
+    plane_router,
     reports_router,
     scheduler,
 )
@@ -90,6 +91,7 @@ app.include_router(agents_router)
 app.include_router(knowledge_router)
 app.include_router(history_router)
 app.include_router(reports_router)
+app.include_router(plane_router)
 app.include_router(auth_guard_router)
 
 # Static files directory

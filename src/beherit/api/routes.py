@@ -34,6 +34,7 @@ knowledge_router = APIRouter(prefix="/api/knowledge", tags=["knowledge"])
 history_router = APIRouter(prefix="/api/history", tags=["history"])
 reports_router = APIRouter(prefix="/api/reports", tags=["reports"])
 auth_guard_router = APIRouter(prefix="/api/auth", tags=["auth_guard"])
+plane_router = APIRouter(prefix="/api/plane", tags=["plane"])
 
 repo = AgentRepository()
 auth_mgr = AgentAuthManager()
@@ -1495,4 +1496,74 @@ async def get_uploaded_attachment(slug: str, filename: str):
         media_type = "text/plain"
 
     return FileResponse(target_path, media_type=media_type)
+
+
+# --- Plane Project Management Endpoints (BEH-065) ---
+
+
+class CreatePlaneIssueRequest(BaseModel):
+    name: str = Field(..., min_length=2, description="Issue name/title")
+    description: str | None = Field(None, description="Issue description or context")
+    priority: str = Field("medium", description="urgent, high, medium, low, none")
+    state: str | None = Field(None, description="Target state: todo, in_progress, done, backlog")
+    module_id: str | None = Field(None, description="Optional module UUID")
+
+
+class UpdatePlaneStateRequest(BaseModel):
+    state: str = Field(..., description="Target state: todo, in_progress, done, cancelled, backlog")
+
+
+@plane_router.get("/issues")
+async def list_plane_issues(state: str | None = None, limit: int = 30):
+    """Retrieve issues from Plane project board (BEH-065)."""
+    from beherit.core.plane import PlaneClient
+
+    client = PlaneClient()
+    issues = await client.list_issues(state=state, limit=limit)
+    return {"total": len(issues), "issues": issues}
+
+
+@plane_router.post("/issues", status_code=status.HTTP_201_CREATED)
+async def create_plane_issue(payload: CreatePlaneIssueRequest):
+    """Create a new issue on the Plane project board (BEH-065)."""
+    from beherit.core.plane import PlaneClient
+
+    client = PlaneClient()
+    res = await client.create_issue(
+        name=payload.name,
+        description=payload.description,
+        priority=payload.priority,
+        state=payload.state,
+        module_id=payload.module_id,
+    )
+    if not res.get("success"):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=res.get("error", "Failed to create issue in Plane"),
+        )
+    return res
+
+
+@plane_router.patch("/issues/{issue_id}/state")
+async def update_plane_issue_state(issue_id: str, payload: UpdatePlaneStateRequest):
+    """Update issue state on the Plane project board (BEH-065)."""
+    from beherit.core.plane import PlaneClient
+
+    client = PlaneClient()
+    res = await client.update_issue_state(issue_id_or_seq=issue_id, state=payload.state)
+    if not res.get("success"):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=res.get("error", "Failed to update issue state in Plane"),
+        )
+    return res
+
+
+@plane_router.get("/states")
+async def get_plane_states():
+    """List available project states from Plane (BEH-065)."""
+    from beherit.core.plane import PlaneClient
+
+    client = PlaneClient()
+    return await client.get_states_map()
 

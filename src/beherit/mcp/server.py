@@ -162,6 +162,45 @@ class MCPServer:
             }
         })
 
+        # Plane Project Management tools (BEH-065)
+        tools.append({
+            "name": "plane_list_issues",
+            "description": "Pobiera listę zadań z tablicy projektu Plane (np. 'todo', 'in_progress', 'done', 'backlog').",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "state": {"type": "string", "description": "Filtruj zadania po statusie (np. 'todo', 'in_progress', 'done', 'backlog')"},
+                    "limit": {"type": "integer", "description": "Maksymalna liczba zadań do pobrania (domyślnie 20)"}
+                }
+            }
+        })
+        tools.append({
+            "name": "plane_create_issue",
+            "description": "Tworzy nowe zadanie, zgłoszenie usterki lub cel na tablicy Plane w projekcie Beherit.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "name": {"type": "string", "description": "Tytuł zadania w Plane"},
+                    "description": {"type": "string", "description": "Szczegółowy opis zadania, log błędu lub kontekst"},
+                    "priority": {"type": "string", "description": "Priorytet: 'urgent', 'high', 'medium', 'low', 'none'"},
+                    "state": {"type": "string", "description": "Początkowy status zadania: 'todo', 'backlog', 'in_progress'"}
+                },
+                "required": ["name"]
+            }
+        })
+        tools.append({
+            "name": "plane_update_state",
+            "description": "Aktualizuje status istniejącego zadania na tablicy Plane (np. przenosi do 'done', 'in_progress', 'cancelled').",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "issue_id": {"type": "string", "description": "UUID zadania lub numer sekwencyjny (np. 65 lub 'e428cd83-...')"},
+                    "state": {"type": "string", "description": "Nowy status zadania: 'todo', 'in_progress', 'done', 'cancelled', 'backlog'"}
+                },
+                "required": ["issue_id", "state"]
+            }
+        })
+
         return tools
 
     async def handle_request(self, message: dict[str, Any]) -> dict[str, Any] | None:

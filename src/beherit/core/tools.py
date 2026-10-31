@@ -393,6 +393,45 @@ class CapabilitiesGuard:
             }
         })
 
+        # Plane Project Management tools (BEH-065)
+        raw_tools.append({
+            "name": "plane_list_issues",
+            "description": "Pobiera listę zadań z tablicy projektu Plane (np. 'todo', 'in_progress', 'done', 'backlog').",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "state": {"type": "string", "description": "Filtruj zadania po statusie (np. 'todo', 'in_progress', 'done', 'backlog')"},
+                    "limit": {"type": "integer", "description": "Maksymalna liczba zadań do pobrania (domyślnie 20)"}
+                }
+            }
+        })
+        raw_tools.append({
+            "name": "plane_create_issue",
+            "description": "Tworzy nowe zadanie, zgłoszenie usterki lub cel na tablicy Plane w projekcie Beherit.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "name": {"type": "string", "description": "Tytuł zadania w Plane"},
+                    "description": {"type": "string", "description": "Szczegółowy opis zadania, log błędu lub kontekst"},
+                    "priority": {"type": "string", "description": "Priorytet: 'urgent', 'high', 'medium', 'low', 'none'"},
+                    "state": {"type": "string", "description": "Początkowy status zadania: 'todo', 'backlog', 'in_progress'"}
+                },
+                "required": ["name"]
+            }
+        })
+        raw_tools.append({
+            "name": "plane_update_state",
+            "description": "Aktualizuje status istniejącego zadania na tablicy Plane (np. przenosi do 'done', 'in_progress', 'cancelled').",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "issue_id": {"type": "string", "description": "UUID zadania lub numer sekwencyjny (np. 65 lub 'e428cd83-...')"},
+                    "state": {"type": "string", "description": "Nowy status zadania: 'todo', 'in_progress', 'done', 'cancelled', 'backlog'"}
+                },
+                "required": ["issue_id", "state"]
+            }
+        })
+
         if not raw_tools:
             return None
 
@@ -591,8 +630,29 @@ class CapabilitiesGuard:
             item_id = args.get("item_id") or args.get("id")
             status = args.get("status")
             return self.manage_todo(agent, action=action, text=text, item_id=item_id, status=status)
+        elif tool_name == "plane_list_issues":
+            from beherit.core.plane import PlaneClient
+            client = PlaneClient()
+            issues = await client.list_issues(state=args.get("state"), limit=args.get("limit", 20))
+            return {"success": True, "total": len(issues), "issues": issues}
+        elif tool_name == "plane_create_issue":
+            from beherit.core.plane import PlaneClient
+            client = PlaneClient()
+            return await client.create_issue(
+                name=args.get("name", ""),
+                description=args.get("description"),
+                priority=args.get("priority", "medium"),
+                state=args.get("state"),
+                module_id=args.get("module_id"),
+            )
+        elif tool_name == "plane_update_state":
+            from beherit.core.plane import PlaneClient
+            client = PlaneClient()
+            issue_id = args.get("issue_id") or args.get("id") or args.get("sequence_id")
+            state = args.get("state", "done")
+            return await client.update_issue_state(issue_id_or_seq=issue_id, state=state)
         else:
             return {
                 "success": False,
-                "error": f"Unknown tool '{tool_name}'. Available: execute_bash, read_file, write_file, list_dir, call_agent, save_memory, recall_memory, forget_memory, manage_todo",
+                "error": f"Unknown tool '{tool_name}'. Available: execute_bash, read_file, write_file, list_dir, call_agent, save_memory, recall_memory, forget_memory, manage_todo, plane_list_issues, plane_create_issue, plane_update_state",
             }

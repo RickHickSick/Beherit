@@ -76,6 +76,24 @@ class Settings(BaseSettings):
         description="Optional Telegram chat ID for job alerts",
     )
 
+    # Plane Project Management Integration (BEH-065)
+    PLANE_API_URL: str = Field(
+        default="http://192.168.1.60:80/api/v1",
+        description="Base URL for Plane API",
+    )
+    PLANE_API_KEY: str | None = Field(
+        default=None,
+        description="API token for Plane (X-Api-Key)",
+    )
+    PLANE_WORKSPACE_SLUG: str = Field(
+        default="arch",
+        description="Default Plane workspace slug",
+    )
+    PLANE_PROJECT_ID: str = Field(
+        default="e428cd83-e3a2-49b3-bfe6-a1c26c4c0993",
+        description="Default Plane project UUID (BEH)",
+    )
+
     @property
     def agents_dir(self) -> Path:
         """Return the directory path where agent folders are stored."""
