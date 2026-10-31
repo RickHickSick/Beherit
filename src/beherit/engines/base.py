@@ -35,6 +35,16 @@ class BaseAgentEngine(ABC):
                 mcp_items.append(f"- **{name}**: `{cfg.command} {' '.join(cfg.args)}`")
             parts.append("## Dostępne Narzędzia MCP (Model Context Protocol)\n" + "\n".join(mcp_items))
 
+        # Ingest persistent long-term memory (BEH-062)
+        try:
+            from beherit.core.memory import AgentMemoryManager
+            mem_mgr = AgentMemoryManager()
+            mem_content = mem_mgr.read_memory(agent)
+            if mem_content:
+                parts.append(f"## Pamięć Długoterminowa i Profil Użytkownika\n{mem_content}")
+        except Exception:
+            pass
+
         # Add available peer agents for delegation (BEH-060)
         try:
             from beherit.core.repository import AgentRepository

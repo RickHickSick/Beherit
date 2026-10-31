@@ -101,6 +101,39 @@ class MCPServer:
             }
         })
 
+        # Long-term Memory tools (BEH-062)
+        tools.append({
+            "name": "save_memory",
+            "description": "Save an important fact, user preference, system configuration, or rule to long-term memory (memory.md).",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "fact": {"type": "string", "description": "The specific fact or piece of information to remember"},
+                    "category": {"type": "string", "description": "Category (e.g. 'Preferencje', 'Infrastruktura', 'Reguły')"}
+                },
+                "required": ["fact"]
+            }
+        })
+        tools.append({
+            "name": "recall_memory",
+            "description": "Read all stored long-term memory facts from memory.md.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {}
+            }
+        })
+        tools.append({
+            "name": "forget_memory",
+            "description": "Remove or forget obsolete facts from long-term memory matching a search string.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "pattern": {"type": "string", "description": "Keyword or text snippet to remove from memory"}
+                },
+                "required": ["pattern"]
+            }
+        })
+
         return tools
 
     async def handle_request(self, message: dict[str, Any]) -> dict[str, Any] | None:

@@ -235,6 +235,10 @@ class UpdateChatSessionRequest(BaseModel):
     title: str = Field(..., min_length=1, max_length=200, description="New chat session title")
 
 
+class UpdateMemoryRequest(BaseModel):
+    content: str = Field(..., description="Full content of memory.md")
+
+
 class ExecuteToolRequest(BaseModel):
     tool: str = Field(..., description="Tool name: execute_bash, read_file, write_file, list_dir")
     args: dict[str, Any] = Field(default_factory=dict)
@@ -618,6 +622,41 @@ async def test_agent_auth(slug: str):
 
 
 # --- Background Scheduler & History Endpoints ---
+
+
+@router.get("/{slug}/memory")
+async def get_agent_memory(slug: str):
+    """Retrieve long-term memory.md content for an agent (BEH-062)."""
+    agent = repo.load_agent(slug)
+    if not agent:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Agent not found.")
+    from beherit.core.memory import AgentMemoryManager
+    mem_mgr = AgentMemoryManager(base_dir=repo.base_dir)
+    content = mem_mgr.read_memory(agent)
+    mem_file = mem_mgr.get_memory_file(agent)
+    return {
+        "slug": slug,
+        "content": content,
+        "file_path": str(mem_file),
+        "exists": mem_file.exists(),
+    }
+
+
+@router.put("/{slug}/memory")
+async def update_agent_memory(slug: str, payload: UpdateMemoryRequest):
+    """Directly update long-term memory.md content for an agent (BEH-062)."""
+    agent = repo.load_agent(slug)
+    if not agent:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Agent not found.")
+    from beherit.core.memory import AgentMemoryManager
+    mem_mgr = AgentMemoryManager(base_dir=repo.base_dir)
+    mem_mgr.set_memory_content(agent, payload.content)
+    mem_file = mem_mgr.get_memory_file(agent)
+    return {
+        "status": "updated",
+        "slug": slug,
+        "file_path": str(mem_file),
+    }
 
 
 @router.get("/{slug}/history")

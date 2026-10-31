@@ -297,6 +297,39 @@ class CapabilitiesGuard:
             }
         })
 
+        # Persistent Long-term Memory tools (BEH-062)
+        raw_tools.append({
+            "name": "save_memory",
+            "description": "Save an important fact, user preference, system configuration, or rule to long-term memory (memory.md).",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "fact": {"type": "string", "description": "The specific fact or piece of information to remember"},
+                    "category": {"type": "string", "description": "Category (e.g. 'Preferencje', 'Infrastruktura', 'Reguły biznesowe')"}
+                },
+                "required": ["fact"]
+            }
+        })
+        raw_tools.append({
+            "name": "recall_memory",
+            "description": "Read all stored long-term memory facts from memory.md.",
+            "parameters": {
+                "type": "object",
+                "properties": {}
+            }
+        })
+        raw_tools.append({
+            "name": "forget_memory",
+            "description": "Remove or forget obsolete facts from long-term memory matching a search string.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "pattern": {"type": "string", "description": "Keyword or text snippet to remove from memory"}
+                },
+                "required": ["pattern"]
+            }
+        })
+
         if not raw_tools:
             return None
 
@@ -473,8 +506,24 @@ class CapabilitiesGuard:
                 context=context,
                 call_stack=call_stack,
             )
+        elif tool_name == "save_memory":
+            fact = args.get("fact", "")
+            category = args.get("category", "Ogólne")
+            from beherit.core.memory import AgentMemoryManager
+            mgr = AgentMemoryManager(base_dir=self.default_workspace)
+            return mgr.save_fact(agent, fact, category)
+        elif tool_name == "recall_memory":
+            from beherit.core.memory import AgentMemoryManager
+            mgr = AgentMemoryManager(base_dir=self.default_workspace)
+            content = mgr.read_memory(agent)
+            return {"success": True, "memory": content or "Brak zapisanych wspomnień w pliku memory.md."}
+        elif tool_name == "forget_memory":
+            pattern = args.get("pattern", "")
+            from beherit.core.memory import AgentMemoryManager
+            mgr = AgentMemoryManager(base_dir=self.default_workspace)
+            return mgr.forget_fact(agent, pattern)
         else:
             return {
                 "success": False,
-                "error": f"Unknown tool '{tool_name}'. Available: execute_bash, read_file, write_file, list_dir, call_agent",
+                "error": f"Unknown tool '{tool_name}'. Available: execute_bash, read_file, write_file, list_dir, call_agent, save_memory, recall_memory, forget_memory",
             }
