@@ -129,10 +129,17 @@ async def manifest():
 
 @app.get("/")
 async def root_index():
-    """Serve the Web UI / Safari iOS PWA."""
+    """Serve the Web UI / Safari iOS PWA with no-cache headers."""
     index_file = STATIC_DIR / "index.html"
     if index_file.exists():
-        return FileResponse(index_file)
+        return FileResponse(
+            index_file,
+            headers={
+                "Cache-Control": "no-cache, no-store, must-revalidate",
+                "Pragma": "no-cache",
+                "Expires": "0",
+            },
+        )
     return {
         "status": "healthy",
         "version": __version__,
