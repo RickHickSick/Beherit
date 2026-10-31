@@ -32,12 +32,14 @@ ENV PYTHONUNBUFFERED=1 \
     BEHERIT_DB_PATH=/app/data/beherit.db \
     PATH="/app/.venv/bin:$PATH"
 
-# Install curl for container health checks and bash for sandboxed tools
+# Install curl for container health checks and bash/bwrap for sandboxed tools
 RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
     ca-certificates \
     bash \
     git \
+    bubblewrap \
+    procps \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app

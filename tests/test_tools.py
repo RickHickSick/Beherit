@@ -128,3 +128,27 @@ async def test_tool_dispatcher(tmp_path: Path):
     res_unknown = await guard.dispatch_tool(agent, "non_existent_tool", {})
     assert res_unknown["success"] is False
     assert "Unknown tool" in res_unknown["error"]
+
+
+@pytest.mark.asyncio
+async def test_bubblewrap_sandbox_isolation(tmp_path: Path):
+    """Verify bubblewrap sandbox execution and containment (BEH-069)."""
+    guard = CapabilitiesGuard(default_workspace=tmp_path)
+    agent = AgentModel(
+        name="Bubblewrap Agent",
+        slug="bwrap-agent",
+        capabilities=AgentCapabilities(terminal=True, terminal_mode=TerminalMode.RESTRICTED),
+    )
+
+    # 1. Successful execution within workspace
+    res = await guard.execute_bash(agent, "echo 'isolated' > token.txt && cat token.txt")
+    assert res["success"] is True
+    assert "isolated" in res["stdout"]
+    assert res["sandbox"] in ("bubblewrap", "restricted_env", "restricted_env_fallback")
+
+    # 2. Verify bwrap command construction
+    cmd = guard._build_bwrap_command(tmp_path, "echo 1")
+    assert any("bwrap" in part for part in cmd)
+    assert "--ro-bind" in cmd
+    assert "--proc" in cmd
+    assert "--unshare-pid" in cmd

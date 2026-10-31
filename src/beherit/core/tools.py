@@ -88,14 +88,29 @@ class CapabilitiesGuard:
         sub_env["HOME"] = str(workspace)
         sub_env["PWD"] = str(workspace)
 
+        import shutil
+        use_bwrap = False
+        if capabilities.terminal_mode == TerminalMode.RESTRICTED and shutil.which("bwrap"):
+            use_bwrap = True
+
         try:
-            process = await asyncio.create_subprocess_shell(
-                command,
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE,
-                cwd=str(workspace),
-                env=sub_env,
-            )
+            if use_bwrap:
+                bwrap_cmd = self._build_bwrap_command(workspace, command)
+                process = await asyncio.create_subprocess_exec(
+                    *bwrap_cmd,
+                    stdout=asyncio.subprocess.PIPE,
+                    stderr=asyncio.subprocess.PIPE,
+                    cwd=str(workspace),
+                    env=sub_env,
+                )
+            else:
+                process = await asyncio.create_subprocess_shell(
+                    command,
+                    stdout=asyncio.subprocess.PIPE,
+                    stderr=asyncio.subprocess.PIPE,
+                    cwd=str(workspace),
+                    env=sub_env,
+                )
 
             stdout_bytes, stderr_bytes = await asyncio.wait_for(
                 process.communicate(),
@@ -105,12 +120,34 @@ class CapabilitiesGuard:
             stdout = stdout_bytes.decode("utf-8", errors="replace")
             stderr = stderr_bytes.decode("utf-8", errors="replace")
 
+            # Detect if bwrap failed due to container permission / user namespace limitations
+            if use_bwrap and process.returncode != 0 and "bwrap:" in stderr and "namespace" in stderr:
+                # Soft fallback to restricted shell
+                fallback_proc = await asyncio.create_subprocess_shell(
+                    command,
+                    stdout=asyncio.subprocess.PIPE,
+                    stderr=asyncio.subprocess.PIPE,
+                    cwd=str(workspace),
+                    env=sub_env,
+                )
+                fb_out, fb_err = await asyncio.wait_for(fallback_proc.communicate(), timeout=timeout)
+                return {
+                    "success": fallback_proc.returncode == 0,
+                    "exit_code": fallback_proc.returncode,
+                    "stdout": fb_out.decode("utf-8", errors="replace"),
+                    "stderr": fb_err.decode("utf-8", errors="replace"),
+                    "mode": capabilities.terminal_mode.value,
+                    "sandbox": "restricted_env_fallback",
+                    "cwd": str(workspace),
+                }
+
             return {
                 "success": process.returncode == 0,
                 "exit_code": process.returncode,
                 "stdout": stdout,
                 "stderr": stderr,
                 "mode": capabilities.terminal_mode.value,
+                "sandbox": "bubblewrap" if use_bwrap else "restricted_env",
                 "cwd": str(workspace),
             }
 
@@ -130,6 +167,40 @@ class CapabilitiesGuard:
                 "error": str(e),
                 "mode": capabilities.terminal_mode.value,
             }
+
+    def _build_bwrap_command(self, workspace: Path, command: str) -> list[str]:
+        """Construct unprivileged bubblewrap sandbox execution command (BEH-069)."""
+        import shutil
+
+        bwrap = shutil.which("bwrap") or "/usr/bin/bwrap"
+        cmd = [
+            bwrap,
+            "--ro-bind", "/usr", "/usr",
+            "--ro-bind", "/bin", "/bin",
+            "--ro-bind", "/lib", "/lib",
+        ]
+        if Path("/lib64").exists():
+            cmd.extend(["--ro-bind-try", "/lib64", "/lib64"])
+        if Path("/etc/resolv.conf").exists():
+            cmd.extend(["--ro-bind-try", "/etc/resolv.conf", "/etc/resolv.conf"])
+        if Path("/etc/ssl").exists():
+            cmd.extend(["--ro-bind-try", "/etc/ssl", "/etc/ssl"])
+        if Path("/etc/ca-certificates").exists():
+            cmd.extend(["--ro-bind-try", "/etc/ca-certificates", "/etc/ca-certificates"])
+
+        cmd.extend([
+            "--proc", "/proc",
+            "--dev", "/dev",
+            "--tmpfs", "/tmp",
+            "--bind", str(workspace), str(workspace),
+            "--chdir", str(workspace),
+            "--unshare-pid",
+            "--unshare-ipc",
+            "--unshare-uts",
+            "--die-with-parent",
+            "bash", "-c", command,
+        ])
+        return cmd
 
     def read_file(self, agent: AgentModel, relative_or_abs_path: str) -> dict[str, Any]:
         """Read a file adhering to read capabilities."""
