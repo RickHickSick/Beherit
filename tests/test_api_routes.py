@@ -20,10 +20,14 @@ def test_health_endpoint():
 
 
 def test_root_index_html():
-    """Verify that root index serves the web UI."""
+    """Verify that root index serves the web UI including the comprehensive user manual."""
     response = client.get("/")
     assert response.status_code == 200
     assert "Beherit" in response.text
+    assert "Instrukcja Obsługi i Przewodnik Beherit" in response.text
+    assert "Jak Podłączyć Agenta" in response.text
+    assert "Słownik Funkcji" in response.text
+    assert "Szybki Start" in response.text
 
 
 def test_agent_creation_and_auth_flow(tmp_path: Path, monkeypatch):

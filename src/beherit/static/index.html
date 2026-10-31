@@ -126,21 +126,28 @@
     </div>
 
     <!-- Navigation Controls -->
-    <div class="flex items-center space-x-1.5 sm:space-x-2">
+    <div class="flex items-center space-x-1 sm:space-x-2">
       <button @click="switchView('dashboard')" 
-              :class="currentView === 'dashboard' ? 'bg-slate-800 text-emerald-400 border-slate-700' : 'text-slate-400 hover:text-slate-200'"
+              :class="currentView === 'dashboard' ? 'bg-slate-800 text-emerald-400 border-slate-700 shadow-sm' : 'text-slate-400 hover:text-slate-200'"
               class="px-2.5 sm:px-3 py-1.5 rounded-lg text-xs sm:text-sm font-medium border border-transparent transition">
         Agenci
       </button>
       <button @click="switchView('chat')" 
-              :class="currentView === 'chat' ? 'bg-slate-800 text-emerald-400 border-slate-700' : 'text-slate-400 hover:text-slate-200'"
+              :class="currentView === 'chat' ? 'bg-slate-800 text-emerald-400 border-slate-700 shadow-sm' : 'text-slate-400 hover:text-slate-200'"
               class="px-2.5 sm:px-3 py-1.5 rounded-lg text-xs sm:text-sm font-medium border border-transparent transition">
         Czat
       </button>
       <button @click="switchView('reports')" 
-              :class="currentView === 'reports' ? 'bg-slate-800 text-emerald-400 border-slate-700' : 'text-slate-400 hover:text-slate-200'"
+              :class="currentView === 'reports' ? 'bg-slate-800 text-emerald-400 border-slate-700 shadow-sm' : 'text-slate-400 hover:text-slate-200'"
               class="px-2.5 sm:px-3 py-1.5 rounded-lg text-xs sm:text-sm font-medium border border-transparent transition">
         Raporty
+      </button>
+      <button @click="switchView('manual')" 
+              :class="currentView === 'manual' ? 'bg-slate-800 text-emerald-400 border-slate-700 shadow-sm' : 'text-slate-400 hover:text-slate-200'"
+              class="px-2.5 sm:px-3 py-1.5 rounded-lg text-xs sm:text-sm font-medium border border-transparent transition flex items-center gap-1.5">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"></path></svg>
+        <span class="hidden sm:inline">Instrukcja</span>
+        <span class="sm:hidden">Pomoc</span>
       </button>
       <button @click="openCreateModalDialog()"
               class="bg-emerald-600 hover:bg-emerald-500 text-slate-950 font-semibold px-2.5 sm:px-3 py-1.5 rounded-lg text-xs sm:text-sm shadow-md shadow-emerald-600/20 transition flex items-center gap-1.5">
@@ -496,7 +503,674 @@
         </div>
       </div>
     </section>
-  </main>
+
+    <!-- VIEW 4: USER MANUAL / INSTRUKCJA OBSŁUGI -->
+    <section x-show="currentView === 'manual'" class="space-y-6 pb-12">
+      <!-- Header Banner -->
+      <div class="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4 bg-gradient-to-r from-slate-900 via-slate-900 to-emerald-950/40 p-5 sm:p-6 rounded-2xl border border-slate-800 shadow-xl">
+        <div class="space-y-1.5">
+          <div class="flex items-center gap-2.5 flex-wrap">
+            <span class="p-2 bg-emerald-500/10 text-emerald-400 rounded-xl border border-emerald-500/20 text-lg">📖</span>
+            <h2 class="text-xl sm:text-2xl font-bold text-slate-100">Instrukcja Obsługi i Przewodnik Beherit</h2>
+            <span class="text-xs px-2.5 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 font-mono font-medium">v0.3.0</span>
+          </div>
+          <p class="text-xs sm:text-sm text-slate-400 max-w-2xl leading-relaxed">
+            Oficjalny, kompleksowy przewodnik po platformie autonomicznych agentów AI. Poznaj sposób podłączania silników SDK i kluczy API, architekturę Markdown-First, bazę wiedzy RAG, integrację z n8n oraz szczegółowy słownik funkcji aplikacji.
+          </p>
+        </div>
+        <!-- Live Search Input -->
+        <div class="w-full lg:w-80 relative">
+          <input type="text" x-model="guideSearchQuery" placeholder="Filtruj tematy i funkcje (np. SDK, n8n, RAG, MCP)..." 
+                 class="w-full bg-slate-950/80 text-slate-100 text-xs sm:text-sm pl-9 pr-8 py-2.5 rounded-xl border border-slate-700/80 focus:border-emerald-500 outline-none transition placeholder-slate-500 shadow-inner">
+          <svg class="w-4 h-4 text-slate-400 absolute left-3 top-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
+          <button x-show="guideSearchQuery" @click="guideSearchQuery = ''" class="absolute right-3 top-2.5 text-slate-400 hover:text-slate-200 text-xs">✕</button>
+        </div>
+      </div>
+
+      <!-- Navigation Pills for Chapters -->
+      <div class="flex flex-wrap gap-1.5 p-1.5 bg-slate-950/60 rounded-xl border border-slate-800/80 text-xs overflow-x-auto custom-scroll">
+        <button @click="guideActiveChapter = 'all'; haptic();" :class="guideActiveChapter === 'all' ? 'bg-slate-800 text-emerald-400 font-semibold shadow' : 'text-slate-400 hover:text-slate-200'" class="px-3 py-1.5 rounded-lg transition whitespace-nowrap">Wszystkie rozdziały</button>
+        <button @click="guideActiveChapter = 'quickstart'; haptic();" :class="guideActiveChapter === 'quickstart' ? 'bg-slate-800 text-emerald-400 font-semibold shadow' : 'text-slate-400 hover:text-slate-200'" class="px-3 py-1.5 rounded-lg transition whitespace-nowrap">⚡ Szybki Start</button>
+        <button @click="guideActiveChapter = 'auth'; haptic();" :class="guideActiveChapter === 'auth' ? 'bg-slate-800 text-emerald-400 font-semibold shadow' : 'text-slate-400 hover:text-slate-200'" class="px-3 py-1.5 rounded-lg transition whitespace-nowrap">🔑 Jak Podłączyć Agenta</button>
+        <button @click="guideActiveChapter = 'capabilities'; haptic();" :class="guideActiveChapter === 'capabilities' ? 'bg-slate-800 text-emerald-400 font-semibold shadow' : 'text-slate-400 hover:text-slate-200'" class="px-3 py-1.5 rounded-lg transition whitespace-nowrap">🌐 Możliwości Platformy</button>
+        <button @click="guideActiveChapter = 'dictionary'; haptic();" :class="guideActiveChapter === 'dictionary' ? 'bg-slate-800 text-emerald-400 font-semibold shadow' : 'text-slate-400 hover:text-slate-200'" class="px-3 py-1.5 rounded-lg transition whitespace-nowrap">📖 Słownik Funkcji & UI</button>
+        <button @click="guideActiveChapter = 'n8n'; haptic();" :class="guideActiveChapter === 'n8n' ? 'bg-slate-800 text-emerald-400 font-semibold shadow' : 'text-slate-400 hover:text-slate-200'" class="px-3 py-1.5 rounded-lg transition whitespace-nowrap">🔌 Integracja n8n</button>
+        <button @click="guideActiveChapter = 'mcp'; haptic();" :class="guideActiveChapter === 'mcp' ? 'bg-slate-800 text-emerald-400 font-semibold shadow' : 'text-slate-400 hover:text-slate-200'" class="px-3 py-1.5 rounded-lg transition whitespace-nowrap">🧩 Narzędzia MCP & Sandbox</button>
+        <button @click="guideActiveChapter = 'api_cli'; haptic();" :class="guideActiveChapter === 'api_cli' ? 'bg-slate-800 text-emerald-400 font-semibold shadow' : 'text-slate-400 hover:text-slate-200'" class="px-3 py-1.5 rounded-lg transition whitespace-nowrap">⚙️ REST API & CLI</button>
+        <button @click="guideActiveChapter = 'faq'; haptic();" :class="guideActiveChapter === 'faq' ? 'bg-slate-800 text-emerald-400 font-semibold shadow' : 'text-slate-400 hover:text-slate-200'" class="px-3 py-1.5 rounded-lg transition whitespace-nowrap">❓ FAQ & Rozwiązywanie Problemów</button>
+      </div>
+
+      <!-- CHAPTER 1: QUICKSTART -->
+      <div x-show="(guideActiveChapter === 'all' || guideActiveChapter === 'quickstart') && guideMatches('szybki start kroki utworzenie agenta pierwsze kroki quickstart')" class="bg-slate-900 border border-slate-800 rounded-2xl p-5 sm:p-6 space-y-4 shadow-sm">
+        <div class="flex items-center gap-2.5 pb-3 border-b border-slate-800">
+          <span class="text-xl">⚡</span>
+          <div>
+            <h3 class="text-lg font-bold text-slate-100">1. Szybki Start — Jak utworzyć i uruchomić agenta w 3 krokach</h3>
+            <p class="text-xs text-slate-400">Podstawowa ścieżka wdrożenia agenta od zera do pierwszej autonomicznej akcji.</p>
+          </div>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs sm:text-sm">
+          <div class="bg-slate-950/60 p-4 rounded-xl border border-slate-800 space-y-2">
+            <div class="flex items-center gap-2">
+              <span class="w-6 h-6 rounded-full bg-emerald-500/20 text-emerald-400 font-bold flex items-center justify-center text-xs">1</span>
+              <h4 class="font-bold text-slate-200">Kreator Agenta</h4>
+            </div>
+            <p class="text-slate-400 leading-relaxed">
+              Kliknij przycisk <span class="text-emerald-400 font-semibold">+ Nowy Agent</span> w górnym pasku. Podaj nazwę (np. <em>Analityk Finansowy</em>), wybierz silnik SDK (np. <em>Google Antigravity</em>) oraz preferowany model LLM (np. <em>gemini-3.8-flash</em>).
+            </p>
+          </div>
+
+          <div class="bg-slate-950/60 p-4 rounded-xl border border-slate-800 space-y-2">
+            <div class="flex items-center gap-2">
+              <span class="w-6 h-6 rounded-full bg-emerald-500/20 text-emerald-400 font-bold flex items-center justify-center text-xs">2</span>
+              <h4 class="font-bold text-slate-200">Podłączenie Uwierzytelnienia</h4>
+            </div>
+            <p class="text-slate-400 leading-relaxed">
+              W sekcji <span class="text-emerald-400 font-semibold">Połączenie Agenta</span> kliknij przycisk <em>„Użyj sesji z serwera”</em> (darmowe tokeny z subskrypcji CLI) lub wklej bezpośredni klucz API. Przetestuj łączność i kliknij <em>Utwórz Agenta</em>.
+            </p>
+          </div>
+
+          <div class="bg-slate-950/60 p-4 rounded-xl border border-slate-800 space-y-2">
+            <div class="flex items-center gap-2">
+              <span class="w-6 h-6 rounded-full bg-emerald-500/20 text-emerald-400 font-bold flex items-center justify-center text-xs">3</span>
+              <h4 class="font-bold text-slate-200">Interakcja i Raporty</h4>
+            </div>
+            <p class="text-slate-400 leading-relaxed">
+              Kliknij <span class="text-emerald-400 font-semibold">💬 Czat</span>, aby rozmawiać w czasie rzeczywistym z podglądem myśli, lub kliknij <span class="text-emerald-400 font-semibold">⚡ Uruchom</span>, aby wykonać zadanie autonomiczne i wygenerować raport w zakładce <em>Raporty</em>.
+            </p>
+          </div>
+        </div>
+      </div>
+
+      <!-- CHAPTER 2: HOW TO CONNECT AN AGENT -->
+      <div x-show="(guideActiveChapter === 'all' || guideActiveChapter === 'auth') && guideMatches('jak podłączyć agenta autoryzacja auth sesja sdk subskrypcja klucz api google antigravity gemini claude code anthropic openai codex ollama healthcheck')" class="bg-slate-900 border border-slate-800 rounded-2xl p-5 sm:p-6 space-y-5 shadow-sm">
+        <div class="flex items-center gap-2.5 pb-3 border-b border-slate-800">
+          <span class="text-xl">🔑</span>
+          <div>
+            <h3 class="text-lg font-bold text-slate-100">2. Jak Podłączyć Agenta — Uwierzytelnianie SDK i Klucze API</h3>
+            <p class="text-xs text-slate-400">Zasada izolacji sesji per agent, różnica między subskrypcją a kluczem API oraz procedury logowania.</p>
+          </div>
+        </div>
+
+        <!-- Callout: Subscriptions vs API Keys -->
+        <div class="p-4 rounded-xl bg-sky-950/40 border border-sky-800/60 text-xs sm:text-sm text-sky-200 space-y-2">
+          <div class="flex items-center gap-2 font-bold text-sky-300">
+            <span>💡</span> Dlaczego warto łączyć agentów przez Subskrypcję SDK (Zero API Token Costs)?
+          </div>
+          <p class="leading-relaxed">
+            W przeciwieństwie do tradycyjnych frameworków agentowych naliczających opłaty za każdy token wejściowy i wyjściowy, Beherit potrafi wykorzystać Twoje aktywne subskrypcje desktopowe (Antigravity CLI, Claude Pro/Team). Dzięki temu możesz uruchamiać nielimitowane audyty i konwersacje bez ponoszenia dodatkowych kosztów API.
+          </p>
+        </div>
+
+        <!-- Per-Provider Step-by-Step Guides -->
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-4 text-xs sm:text-sm">
+          <!-- Google Antigravity -->
+          <div class="bg-slate-950/70 p-4 rounded-xl border border-slate-800 space-y-3">
+            <div class="flex items-center justify-between">
+              <h4 class="font-bold text-emerald-400 flex items-center gap-1.5">
+                <span>🟢</span> Google Antigravity SDK
+              </h4>
+              <span class="text-[10px] bg-slate-800 px-2 py-0.5 rounded text-slate-300 font-mono">Domyślny</span>
+            </div>
+            <p class="text-slate-400 leading-relaxed text-xs">
+              Oficjalne środowisko agentowe Google DeepMind. Obsługuje modele Gemini 3.8 Flash, Pro oraz Claude 3.7 Sonnet w ramach subskrypcji.
+            </p>
+            <div class="space-y-1.5 text-xs text-slate-300">
+              <div class="font-semibold text-slate-200">Sposoby podłączenia:</div>
+              <ul class="list-disc list-inside space-y-1 text-slate-400">
+                <li><strong class="text-slate-300">1-Klik Import z Hosta:</strong> Kliknij przycisk <em>„Użyj sesji z serwera”</em>. Beherit sklonuje plik <code class="text-emerald-400">~/.gemini/antigravity-cli/.credentials.json</code> do katalogu agenta.</li>
+                <li><strong class="text-slate-300">Klucz Google Gemini API:</strong> Wygeneruj darmowy lub płatny klucz w <a href="https://aistudio.google.com/" target="_blank" class="text-emerald-400 underline">Google AI Studio</a> (<code class="text-xs">AIzaSy...</code>) i wklej w pole tokena.</li>
+              </ul>
+            </div>
+          </div>
+
+          <!-- Anthropic Claude Code -->
+          <div class="bg-slate-950/70 p-4 rounded-xl border border-slate-800 space-y-3">
+            <div class="flex items-center justify-between">
+              <h4 class="font-bold text-amber-400 flex items-center gap-1.5">
+                <span>🟠</span> Claude Code SDK
+              </h4>
+              <span class="text-[10px] bg-slate-800 px-2 py-0.5 rounded text-slate-300 font-mono">Anthropic</span>
+            </div>
+            <p class="text-slate-400 leading-relaxed text-xs">
+              Środowisko agentowe Anthropic bazujące na subskrypcjach Claude Pro/Team lub bezpośrednim API Messages.
+            </p>
+            <div class="space-y-1.5 text-xs text-slate-300">
+              <div class="font-semibold text-slate-200">Sposoby podłączenia:</div>
+              <ul class="list-disc list-inside space-y-1 text-slate-400">
+                <li><strong class="text-slate-300">Subskrypcja Pro/Team:</strong> Po zalogowaniu <code class="text-amber-400">claude</code> na hoście, kliknij <em>„Użyj sesji z serwera”</em> (wykrywa plik <code class="text-xs">~/.claude/.credentials.json</code>).</li>
+                <li><strong class="text-slate-300">Klucz Anthropic API:</strong> Wygeneruj klucz w <a href="https://console.anthropic.com/settings/keys" target="_blank" class="text-amber-400 underline">Anthropic Console</a> (<code class="text-xs">sk-ant-...</code>) i wklej w formularzu agenta.</li>
+              </ul>
+            </div>
+          </div>
+
+          <!-- OpenAI Codex & Ollama -->
+          <div class="bg-slate-950/70 p-4 rounded-xl border border-slate-800 space-y-3">
+            <div class="flex items-center justify-between">
+              <h4 class="font-bold text-sky-400 flex items-center gap-1.5">
+                <span>🔵</span> OpenAI & Lokalne LLM
+              </h4>
+              <span class="text-[10px] bg-slate-800 px-2 py-0.5 rounded text-slate-300 font-mono">OpenAI / Ollama</span>
+            </div>
+            <p class="text-slate-400 leading-relaxed text-xs">
+              Obsługa modeli OpenAI (GPT-4o, o3-mini) oraz całkowicie lokalnych modeli uruchamianych przez instancję Ollama.
+            </p>
+            <div class="space-y-1.5 text-xs text-slate-300">
+              <div class="font-semibold text-slate-200">Sposoby podłączenia:</div>
+              <ul class="list-disc list-inside space-y-1 text-slate-400">
+                <li><strong class="text-slate-300">OpenAI API:</strong> Utwórz klucz w <a href="https://platform.openai.com/api-keys" target="_blank" class="text-sky-400 underline">OpenAI Platform</a> (<code class="text-xs">sk-...</code>).</li>
+                <li><strong class="text-slate-300">Lokalne Ollama:</strong> Uruchom Ollama na serwerze i kliknij przycisk <em>„🔄”</em> (Odśwież modele) — Beherit pobierze lokalne modele bez wysyłania danych do chmury.</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+
+        <!-- Auth Healthcheck details -->
+        <div class="p-4 rounded-xl bg-slate-950/80 border border-slate-800 text-xs sm:text-sm space-y-2">
+          <h4 class="font-bold text-slate-200 flex items-center gap-1.5">
+            <span>🛡️</span> Izolacja Sesji i Diagnostyka Połączenia (Auth Healthcheck)
+          </h4>
+          <p class="text-slate-400 leading-relaxed">
+            Każdy agent posiada własny folder <code class="text-emerald-400">.auth/session.json</code> z restrykcyjnymi uprawnieniami systemowymi <code class="text-emerald-400">chmod 0600</code>. Dzięki temu wygaśnięcie subskrypcji jednego agenta nie ma wpływu na pozostałych. Przycisk <strong>„Przetestuj połączenie”</strong> wykonuje natychmiastowy test walidacyjny struktury tokena i czasu wygaśnięcia, prezentując status kolorową odznaką: 🟢 <span class="text-emerald-400 font-semibold">Połączono</span>, 🟡 <span class="text-amber-400 font-semibold">Wygasła</span> lub 🔴 <span class="text-rose-400 font-semibold">Niepołączony</span>.
+          </p>
+        </div>
+      </div>
+
+      <!-- CHAPTER 3: CAPABILITIES & ARCHITECTURE -->
+      <div x-show="(guideActiveChapter === 'all' || guideActiveChapter === 'capabilities') && guideMatches('możliwości platformy architektura markdown obsidian sse czat thinking abort anuluj multi-cron rag knowledge baza wiedzy pdf obrazy linki youtube multimodalne raporty artefakty sandbox capabilitiesguard mcp zero-leak')" class="bg-slate-900 border border-slate-800 rounded-2xl p-5 sm:p-6 space-y-5 shadow-sm">
+        <div class="flex items-center gap-2.5 pb-3 border-b border-slate-800">
+          <span class="text-xl">🌐</span>
+          <div>
+            <h3 class="text-lg font-bold text-slate-100">3. Przegląd Możliwości i Architektura Beherit</h3>
+            <p class="text-xs text-slate-400">Poznaj zaawansowane mechanizmy platformy: Markdown-first, hybrydowy RAG, Multi-Cron, MCP i piaskownicę.</p>
+          </div>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs sm:text-sm">
+          <!-- Capability 1: Markdown-First & Obsidian -->
+          <div class="bg-slate-950/60 p-4 rounded-xl border border-slate-800 space-y-2">
+            <h4 class="font-bold text-emerald-400 flex items-center gap-2">
+              <span>📝</span> Filozofia Markdown-First & Obsidian
+            </h4>
+            <p class="text-slate-400 leading-relaxed text-xs">
+              Agenci nie są zamknięci w relacyjnej bazie danych. Każdy agent to zwykły katalog zawierający plik <code class="text-slate-200">agent.md</code> (YAML + Master Prompt) oraz <code class="text-slate-200">instructions.md</code>. Konfigurując zmienną <code class="text-emerald-400">BEHERIT_AGENTS_DIR</code> w <code class="text-slate-300">.env</code>, możesz zarządzać agentami bezpośrednio z poziomu notatek w sejfie Obsidian.
+            </p>
+          </div>
+
+          <!-- Capability 2: Live Chat, Thinking & Abort -->
+          <div class="bg-slate-950/60 p-4 rounded-xl border border-slate-800 space-y-2">
+            <h4 class="font-bold text-sky-400 flex items-center gap-2">
+              <span>💬</span> Czat SSE, Myśli Modelu i Anulowanie (Abort)
+            </h4>
+            <p class="text-slate-400 leading-relaxed text-xs">
+              Strumieniowanie odpowiedzi w czasie rzeczywistym przez Server-Sent Events (SSE). Wewnętrzny proces myślowy modelu trafia do zwijanego akordeonu <em>„Myśli modelu”</em>. W trakcie generowania dostępny jest czerwony przycisk <span class="text-rose-400 font-semibold">Zatrzymaj</span>, który natychmiast wysyła sygnał przerwania <code class="text-slate-300">SIGKILL</code> do procesu i zachowuje fragment odpowiedzi w SQLite.
+            </p>
+          </div>
+
+          <!-- Capability 3: Multi-Cron Scheduler -->
+          <div class="bg-slate-950/60 p-4 rounded-xl border border-slate-800 space-y-2">
+            <h4 class="font-bold text-amber-400 flex items-center gap-2">
+              <span>⏰</span> Wielozadaniowy Harmonogram (Multi-Cron)
+            </h4>
+            <p class="text-slate-400 leading-relaxed text-xs">
+              Jeden agent może realizować wiele różnych zadań cyklicznych w tle (np. poranny audyt o 08:00 i wieczorny raport o 20:00). Każde zadanie posiada własny prompt i ścieżkę pliku docelowego. Rozwijany przycisk <span class="text-amber-400 font-semibold">⚡ Uruchom</span> pozwala na natychmiastowe doraźne uruchomienie wybranego zadania lub wpisanie promptu ad-hoc.
+            </p>
+          </div>
+
+          <!-- Capability 4: Local Hybrid RAG -->
+          <div class="bg-slate-950/60 p-4 rounded-xl border border-slate-800 space-y-2">
+            <h4 class="font-bold text-purple-400 flex items-center gap-2">
+              <span>📚</span> Lokalny Hybrydowy RAG (Baza Wiedzy)
+            </h4>
+            <p class="text-slate-400 leading-relaxed text-xs">
+              Wyszukiwarka semantyczna w SQLite FTS5 z algorytmem rankingowym BM25. Beherit dzieli pliki z folderu <code class="text-slate-200">knowledge/</code> na akapity i wstrzykuje do zapytania wyłącznie najbardziej pasujące fragmenty. Obsługuje dokumenty Markdown, PDF (z biblioteką pypdf), obrazy z podglądem oraz linki WWW i wideo YouTube (z autodetekcją metadanych oEmbed).
+            </p>
+          </div>
+
+          <!-- Capability 5: Multimodal Artifacts -->
+          <div class="bg-slate-950/60 p-4 rounded-xl border border-slate-800 space-y-2">
+            <h4 class="font-bold text-pink-400 flex items-center gap-2">
+              <span>🖼️</span> Multimodalne Raporty i Artefakty
+            </h4>
+            <p class="text-slate-400 leading-relaxed text-xs">
+              Gdy agent wygeneruje wykres, obrazek, wideo lub plik z danymi w podkatalogu roboczym, system automatycznie wykrywa nowy plik, rejestruje go jako artefakt zadania i osadza interaktywny podgląd w raporcie Markdown oraz w tabeli historii audytów.
+            </p>
+          </div>
+
+          <!-- Capability 6: Sandbox CapabilitiesGuard & MCP -->
+          <div class="bg-slate-950/60 p-4 rounded-xl border border-slate-800 space-y-2">
+            <h4 class="font-bold text-teal-400 flex items-center gap-2">
+              <span>🛡️</span> Piaskownica Narzędzi & Wbudowany Serwer MCP
+            </h4>
+            <p class="text-slate-400 leading-relaxed text-xs">
+              Trzy poziomy ochrony terminala bash: <em>Piaskownica (Restricted)</em> — twarda blokada ucieczek <code class="text-slate-300">..</code> i wrażliwych katalogów systemowych, <em>Pełna swoboda (Unrestricted)</em> oraz <em>Wyłączony</em>. Beherit udostępnia narzędzia agenta jako oficjalny serwer Model Context Protocol (<code class="text-teal-400">beherit mcp --agent-slug</code>).
+            </p>
+          </div>
+        </div>
+      </div>
+
+      <!-- CHAPTER 4: DETAILED UI DICTIONARY (WHAT DOES EACH FUNCTION DO?) -->
+      <div x-show="(guideActiveChapter === 'all' || guideActiveChapter === 'dictionary') && guideMatches('słownik funkcji ui co robi przycisk karta agenta formularz czat raporty wiedza parametry')" class="bg-slate-900 border border-slate-800 rounded-2xl p-5 sm:p-6 space-y-6 shadow-sm">
+        <div class="flex items-center gap-2.5 pb-3 border-b border-slate-800">
+          <span class="text-xl">📖</span>
+          <div>
+            <h3 class="text-lg font-bold text-slate-100">4. Szczegółowy Słownik Funkcji i Elementów Interfejsu (UI)</h3>
+            <p class="text-xs text-slate-400">Poznaj przeznaczenie każdego przycisku, przełącznika, formularza i parametru w aplikacji.</p>
+          </div>
+        </div>
+
+        <!-- Section A: Agent Card on Dashboard -->
+        <div class="space-y-3">
+          <h4 class="text-sm font-bold text-emerald-400 flex items-center gap-2">
+            <span>🎴</span> Przyciski i elementy na Karcie Agenta (Pulpit):
+          </h4>
+          <div class="overflow-x-auto">
+            <table class="w-full text-left text-xs text-slate-300 border border-slate-800 rounded-xl overflow-hidden">
+              <thead class="bg-slate-950/80 text-slate-400 border-b border-slate-800">
+                <tr>
+                  <th class="px-3 py-2 w-48">Przycisk / Element</th>
+                  <th class="px-3 py-2">Co dokładnie robi ta funkcja?</th>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-slate-800/60 bg-slate-950/40">
+                <tr>
+                  <td class="px-3 py-2.5 font-bold text-slate-200">Odznaka Silnika i Modelu</td>
+                  <td class="px-3 py-2.5 text-slate-400">Wyświetla nazwę platformy wykonawczej (Antigravity, Claude, Codex) oraz używanego modelu LLM.</td>
+                </tr>
+                <tr>
+                  <td class="px-3 py-2.5 font-bold text-slate-200">Odznaka Połączenia (Klucz)</td>
+                  <td class="px-3 py-2.5 text-slate-400">Sygnalizuje stan autoryzacji: zielona (<strong class="text-emerald-400">Połączono</strong>), żółta (<strong class="text-amber-400">Wygasła</strong>) lub czerwona (<strong class="text-rose-400">Brak klucza</strong>). Kliknięcie otwiera okno zarządzania kluczem.</td>
+                </tr>
+                <tr>
+                  <td class="px-3 py-2.5 font-bold text-amber-400">Przycisk ⚡ Uruchom</td>
+                  <td class="px-3 py-2.5 text-slate-400">Natychmiast wywołuje domyślne zadanie autonomiczne agenta w tle, generuje raport audytowy i zapisuje wynik w historii bazy SQLite.</td>
+                </tr>
+                <tr>
+                  <td class="px-3 py-2.5 font-bold text-amber-400">Rozwijane menu ⚡ (Split-button)</td>
+                  <td class="px-3 py-2.5 text-slate-400">Wyświetla listę zadań ze zdefiniowanego harmonogramu Multi-Cron oraz opcję <em>„⚡ Doraźny Prompt (Ad-hoc)”</em> pozwalającą na jednorazowe wydanie polecenia bez edycji stałej konfiguracji.</td>
+                </tr>
+                <tr>
+                  <td class="px-3 py-2.5 font-bold text-slate-200">Przycisk 💬 Czat</td>
+                  <td class="px-3 py-2.5 text-slate-400">Przełącza widok do interaktywnego okna rozmowy na żywo z danym agentem i wczytuje historię ostatniej sesji.</td>
+                </tr>
+                <tr>
+                  <td class="px-3 py-2.5 font-bold text-slate-200">Przycisk 📚 Wiedza</td>
+                  <td class="px-3 py-2.5 text-slate-400">Otwiera menedżer bazy wiedzy (RAG): spis dokumentów, formularz dodawania notatek, strefę uploadu plików PDF/obrazów oraz test dopasowania BM25.</td>
+                </tr>
+                <tr>
+                  <td class="px-3 py-2.5 font-bold text-slate-200">Przycisk 🔌 n8n</td>
+                  <td class="px-3 py-2.5 text-slate-400">Otwiera centrum integracji webhooków: generator gotowego węzła HTTP Request w n8n, polecenia cURL oraz narzędzie testowania na żywo.</td>
+                </tr>
+                <tr>
+                  <td class="px-3 py-2.5 font-bold text-slate-200">Przycisk ⚙️ Edytuj</td>
+                  <td class="px-3 py-2.5 text-slate-400">Otwiera modal pełnej modyfikacji agenta: zmiana nazwy, silnika, modelu, poziomu terminala, promptu głównego i harmonogramów cron.</td>
+                </tr>
+                <tr>
+                  <td class="px-3 py-2.5 font-bold text-slate-200">Przycisk 🔑 Klucz</td>
+                  <td class="px-3 py-2.5 text-slate-400">Otwiera okno autoryzacji: 1-kliknięcie importu sesji z serwera, pole wklejenia klucza API oraz przycisk natychmiastowego testu połączenia.</td>
+                </tr>
+                <tr>
+                  <td class="px-3 py-2.5 font-bold text-rose-400">Przycisk 🗑️ Usuń</td>
+                  <td class="px-3 py-2.5 text-slate-400">Bezpiecznie usuwa katalog agenta z dysku oraz kaskadowo kasuje powiązane wpisy historii, sesji i wiadomości czatu w bazie danych SQLite.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- Section B: Create and Edit Form Fields -->
+        <div class="space-y-3">
+          <h4 class="text-sm font-bold text-emerald-400 flex items-center gap-2">
+            <span>📝</span> Pola Formularza Tworzenia i Edycji Agenta:
+          </h4>
+          <div class="overflow-x-auto">
+            <table class="w-full text-left text-xs text-slate-300 border border-slate-800 rounded-xl overflow-hidden">
+              <thead class="bg-slate-950/80 text-slate-400 border-b border-slate-800">
+                <tr>
+                  <th class="px-3 py-2 w-48">Pole / Parametr</th>
+                  <th class="px-3 py-2">Co dokładnie robi to pole?</th>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-slate-800/60 bg-slate-950/40">
+                <tr>
+                  <td class="px-3 py-2.5 font-bold text-slate-200">Nazwa Agenta (`name`)</td>
+                  <td class="px-3 py-2.5 text-slate-400">Oficjalna nazwa agenta widoczna na kafelku pulpitu, w czacie oraz w nagłówkach generowanych raportów.</td>
+                </tr>
+                <tr>
+                  <td class="px-3 py-2.5 font-bold text-slate-200">Opis Agenta (`description`)</td>
+                  <td class="px-3 py-2.5 text-slate-400">Krótka notatka prezentowana na kafelku agenta wyjaśniająca jego rolę (np. <em>Audytor spójności tabel rynkowych</em>).</td>
+                </tr>
+                <tr>
+                  <td class="px-3 py-2.5 font-bold text-slate-200">Slug (Folder) (`slug`)</td>
+                  <td class="px-3 py-2.5 text-slate-400">Unikalny identyfikator techniczny stanowiący nazwę folderu na dysku/w Obsidianie (litery, cyfry, myślniki).</td>
+                </tr>
+                <tr>
+                  <td class="px-3 py-2.5 font-bold text-slate-200">Silnik SDK (`engine`)</td>
+                  <td class="px-3 py-2.5 text-slate-400">Wybór środowiska wykonawczego: <code class="text-emerald-400">antigravity</code> (Google), <code class="text-amber-400">claude-code</code> (Anthropic) lub <code class="text-sky-400">codex</code> (OpenAI).</td>
+                </tr>
+                <tr>
+                  <td class="px-3 py-2.5 font-bold text-slate-200">Model Silnika (`model`)</td>
+                  <td class="px-3 py-2.5 text-slate-400">Wybór konkretnego modelu sztucznej inteligencji. Przycisk <strong>🔄</strong> obok pola odpytuje konto dostawcy o aktualną listę dostępnych modeli.</td>
+                </tr>
+                <tr>
+                  <td class="px-3 py-2.5 font-bold text-slate-200">Uprawnienia Terminala (Bash)</td>
+                  <td class="px-3 py-2.5 text-slate-400">
+                    Określa granice dostępu powłoki: 
+                    <strong class="text-emerald-400">Piaskownica (Restricted)</strong> — komendy tylko w katalogu agenta, blokada traversalów i wrażliwych katalogów; 
+                    <strong class="text-amber-400">Pełna swoboda (Unrestricted)</strong> — pełny dostęp do systemu; 
+                    <strong class="text-rose-400">Wyłączony</strong> — zakaz uruchamiania powłoki.
+                  </td>
+                </tr>
+                <tr>
+                  <td class="px-3 py-2.5 font-bold text-slate-200">Uprawnienia Plików i Bazy</td>
+                  <td class="px-3 py-2.5 text-slate-400">Flagi <code class="text-slate-300">file_read</code>, <code class="text-slate-300">file_write</code>, <code class="text-slate-300">database_read</code> włączające dostęp do narzędzi operacji dyskowych i zapytań SQL.</td>
+                </tr>
+                <tr>
+                  <td class="px-3 py-2.5 font-bold text-slate-200">Sekcja Połączenie Agenta</td>
+                  <td class="px-3 py-2.5 text-slate-400">Pozwala wybrać typ autoryzacji (Sesja SDK vs Klucz API), zaimportować sesję z serwera przyciskiem <em>„Użyj sesji z serwera”</em> oraz przetestować połączenie.</td>
+                </tr>
+                <tr>
+                  <td class="px-3 py-2.5 font-bold text-slate-200">Master Prompt (System Prompt)</td>
+                  <td class="px-3 py-2.5 text-slate-400">Główny prompt definiujący tożsamość, cel główny i zasady rozumowania agenta, zapisywany w pliku <code class="text-slate-300">agent.md</code>.</td>
+                </tr>
+                <tr>
+                  <td class="px-3 py-2.5 font-bold text-slate-200">Wytyczne Operacyjne</td>
+                  <td class="px-3 py-2.5 text-slate-400">Szczegółowe instrukcje behawioralne, reguły formatowania tabel Markdown i procedury krok po kroku zapisywane w pliku <code class="text-slate-300">instructions.md</code>.</td>
+                </tr>
+                <tr>
+                  <td class="px-3 py-2.5 font-bold text-slate-200">Klocki MCP & Edytor JSON</td>
+                  <td class="px-3 py-2.5 text-slate-400">Pozwala dodać serwery Model Context Protocol (Brave Search, PostgreSQL, SQLite, Filesystem, GitHub, Puppeteer, Fetch) i edytować ich konfigurację JSON.</td>
+                </tr>
+                <tr>
+                  <td class="px-3 py-2.5 font-bold text-slate-200">Harmonogram Multi-Cron</td>
+                  <td class="px-3 py-2.5 text-slate-400">Konfiguracja nielimitowanych zadań cyklicznych w tle (`ScheduledJob`), zdefiniowanie wyrażenia cron, dedykowanego promptu oraz pliku docelowego.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- Section C: Chat & Reports Elements -->
+        <div class="space-y-3">
+          <h4 class="text-sm font-bold text-emerald-400 flex items-center gap-2">
+            <span>💬</span> Elementy Okna Czatu i Raportów:
+          </h4>
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
+            <div class="bg-slate-950/60 p-3.5 rounded-xl border border-slate-800 space-y-1">
+              <span class="font-bold text-slate-200">Selektor Wątków w Czacie:</span>
+              <p class="text-slate-400">Umożliwia przełączanie się między niezależnymi sesjami dialogowymi z agentem lub otworzenie czystego wątku przyciskiem <em>„+ Nowy Wątek”</em> bez utraty poprzedniej historii.</p>
+            </div>
+            <div class="bg-slate-950/60 p-3.5 rounded-xl border border-slate-800 space-y-1">
+              <span class="font-bold text-slate-200">Zwijany Akordeon Myśli (*Thinking*):</span>
+              <p class="text-slate-400">Pozwala podejrzeć, w jaki sposób model analizował zadanie i jakie kroki zaplanował, bez zaśmiecania ostatecznej treści odpowiedzi.</p>
+            </div>
+            <div class="bg-slate-950/60 p-3.5 rounded-xl border border-slate-800 space-y-1">
+              <span class="font-bold text-rose-400">Przycisk Zatrzymaj (Stop / Abort):</span>
+              <p class="text-slate-400">Wysyła sygnał przerwania procesu do aktywnego CLI, natychmiast kończąc strumień i trwale zapisując dotychczas odebrany fragment odpowiedzi.</p>
+            </div>
+            <div class="bg-slate-950/60 p-3.5 rounded-xl border border-slate-800 space-y-1">
+              <span class="font-bold text-slate-200">Przycisk 📄 Raport w Tabeli Historii:</span>
+              <p class="text-slate-400">Otwiera okno renderujące sformatowaną treść zapisanego raportu Markdown wraz z nagłówkami, tabelami, wykresami i pobranymi artefaktami.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- CHAPTER 5: N8N INTEGRATION & WEBHOOKS -->
+      <div x-show="(guideActiveChapter === 'all' || guideActiveChapter === 'n8n') && guideMatches('integracja n8n automatyzacja webhook curl rest api endpoint payload destination_file callback_url async_execution')" class="bg-slate-900 border border-slate-800 rounded-2xl p-5 sm:p-6 space-y-5 shadow-sm">
+        <div class="flex items-center gap-2.5 pb-3 border-b border-slate-800">
+          <span class="text-xl">🔌</span>
+          <div>
+            <h3 class="text-lg font-bold text-slate-100">5. Automatyzacja i Integracja z n8n oraz Zewnętrznymi Webhookami</h3>
+            <p class="text-xs text-slate-400">Steruj agentami Beherit ze swoich przepływów n8n, zapisuj wyniki w Obsidianie i odbieraj callbacki.</p>
+          </div>
+        </div>
+
+        <div class="space-y-3 text-xs sm:text-sm text-slate-300">
+          <p class="leading-relaxed">
+            Każdy agent Beherit posiada dedykowany uniwersalny endpoint webhooka: <code class="text-emerald-400 font-mono text-xs">POST /api/agents/{slug}/run</code>. Umożliwia on zdalne uruchomienie agenta z zewnętrznego systemu (n8n, cron, curl), przekazanie dowolnego kontekstu JSON, zapisanie wyniku do konkretnego pliku w skarbcu Obsidian oraz wysłanie zwrotnego powiadomienia (callbacku).
+          </p>
+
+          <!-- Webhook Parameters Table -->
+          <div class="overflow-x-auto">
+            <table class="w-full text-left text-xs text-slate-300 border border-slate-800 rounded-xl overflow-hidden">
+              <thead class="bg-slate-950/80 text-slate-400 border-b border-slate-800">
+                <tr>
+                  <th class="px-3 py-2 w-40">Parametr JSON</th>
+                  <th class="px-3 py-2 w-24">Typ</th>
+                  <th class="px-3 py-2">Opis i przeznaczenie</th>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-slate-800/60 bg-slate-950/40">
+                <tr>
+                  <td class="px-3 py-2 font-mono text-emerald-400">prompt</td>
+                  <td class="px-3 py-2 text-slate-400">string</td>
+                  <td class="px-3 py-2 text-slate-300">Instrukcja lub pytanie dla agenta (opcjonalne — domyślnie używa promptu agenta).</td>
+                </tr>
+                <tr>
+                  <td class="px-3 py-2 font-mono text-emerald-400">context</td>
+                  <td class="px-3 py-2 text-slate-400">object</td>
+                  <td class="px-3 py-2 text-slate-300">Dowolne dane strukturalne (np. payload z webhooka sklepu, błąd z potoku danych, dane użytkownika).</td>
+                </tr>
+                <tr>
+                  <td class="px-3 py-2 font-mono text-emerald-400">destination_file</td>
+                  <td class="px-3 py-2 text-slate-400">string</td>
+                  <td class="px-3 py-2 text-slate-300">Ścieżka do pliku w skarbcu Obsidian, w którym ma zostać zapisany wynik (np. <code class="text-xs">Raporty/Status.md</code>).</td>
+                </tr>
+                <tr>
+                  <td class="px-3 py-2 font-mono text-emerald-400">file_mode</td>
+                  <td class="px-3 py-2 text-slate-400">string</td>
+                  <td class="px-3 py-2 text-slate-300"><code class="text-xs">"overwrite"</code> (nadpisuje treść) lub <code class="text-xs">"append"</code> (dopisuje na końcu pliku — idealne dla dzienników).</td>
+                </tr>
+                <tr>
+                  <td class="px-3 py-2 font-mono text-emerald-400">save_report</td>
+                  <td class="px-3 py-2 text-slate-400">boolean</td>
+                  <td class="px-3 py-2 text-slate-300">Czy wygenerować oficjalny raport audytowy w folderze <code class="text-xs">reports/</code> i zapisać w historii SQLite.</td>
+                </tr>
+                <tr>
+                  <td class="px-3 py-2 font-mono text-emerald-400">callback_url</td>
+                  <td class="px-3 py-2 text-slate-400">string</td>
+                  <td class="px-3 py-2 text-slate-300">Adres URL webhooka n8n, na który Beherit wyśle zapytanie POST po zakończeniu przetwarzania.</td>
+                </tr>
+                <tr>
+                  <td class="px-3 py-2 font-mono text-emerald-400">async_execution</td>
+                  <td class="px-3 py-2 text-slate-400">boolean</td>
+                  <td class="px-3 py-2 text-slate-300">Gdy <code class="text-xs">true</code>, endpoint natychmiast odpowiada <code class="text-xs">200 OK {"async": true}</code>, a agent pracuje w tle.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <!-- cURL Example -->
+          <div class="space-y-1.5 pt-2">
+            <span class="font-bold text-xs text-slate-200">Przykładowe polecenie cURL do uruchomienia agenta:</span>
+            <pre class="bg-slate-950 p-3 rounded-xl border border-slate-800 text-[11px] font-mono text-emerald-300 overflow-x-auto custom-scroll"><code>curl -X POST "http://100.121.196.113:8650/api/agents/analityk-rynkow/run" \
+     -H "Content-Type: application/json" \
+     -d '{
+       "prompt": "Przeanalizuj dzisiejszy raport sprzedaży",
+       "context": {"transakcje": 142, "obrot": 18500},
+       "destination_file": "Raporty/Sprzedaz-Dziś.md",
+       "file_mode": "overwrite",
+       "save_report": true
+     }'</code></pre>
+          </div>
+        </div>
+      </div>
+
+      <!-- CHAPTER 6: MCP SERVERS & SANDBOX -->
+      <div x-show="(guideActiveChapter === 'all' || guideActiveChapter === 'mcp') && guideMatches('klocki mcp serwer piaskownica sandbox uprawnienia terminal brave postgres sqlite filesystem github puppeteer')" class="bg-slate-900 border border-slate-800 rounded-2xl p-5 sm:p-6 space-y-5 shadow-sm">
+        <div class="flex items-center gap-2.5 pb-3 border-b border-slate-800">
+          <span class="text-xl">🧩</span>
+          <div>
+            <h3 class="text-lg font-bold text-slate-100">6. Narzędzia MCP i Piaskownica Uprawnień (Sandbox)</h3>
+            <p class="text-xs text-slate-400">Model Context Protocol, integracja zewnętrznych serwerów narzędzi i ochrona systemu.</p>
+          </div>
+        </div>
+
+        <div class="space-y-3 text-xs sm:text-sm text-slate-300 leading-relaxed">
+          <p>
+            Beherit wspiera oficjalny standard **Model Context Protocol (MCP)** stworzony przez Anthropic. Agent może nie tylko korzystać z zewnętrznych serwerów MCP, ale sam Beherit udostępnia wbudowany serwer narzędzi piaskownicy:
+          </p>
+          <pre class="bg-slate-950 p-3 rounded-xl border border-slate-800 text-[11px] font-mono text-teal-300"><code>beherit mcp --agent-slug analityk-rynkow</code></pre>
+
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-3 pt-2 text-xs">
+            <div class="bg-slate-950/60 p-3.5 rounded-xl border border-slate-800 space-y-1">
+              <span class="font-bold text-emerald-400">🔍 Brave Search MCP:</span>
+              <p class="text-slate-400">Umożliwia agentowi wyszukiwanie aktualnych informacji w sieci WWW live przy użyciu oficjalnego klucza Brave Search API.</p>
+            </div>
+            <div class="bg-slate-950/60 p-3.5 rounded-xl border border-slate-800 space-y-1">
+              <span class="font-bold text-sky-400">🐘 PostgreSQL & SQLite MCP:</span>
+              <p class="text-slate-400">Udostępnia agentowi możliwość inspekcji schematów tabel i bezpiecznego wykonywania zapytań SQL do wskazanej bazy danych.</p>
+            </div>
+            <div class="bg-slate-950/60 p-3.5 rounded-xl border border-slate-800 space-y-1">
+              <span class="font-bold text-amber-400">📁 Filesystem MCP:</span>
+              <p class="text-slate-400">Pozwala na bezpieczny odczyt i zapis plików w wybranych, precyzyjnie zdefiniowanych katalogach roboczych.</p>
+            </div>
+            <div class="bg-slate-950/60 p-3.5 rounded-xl border border-slate-800 space-y-1">
+              <span class="font-bold text-purple-400">🐙 GitHub & Puppeteer MCP:</span>
+              <p class="text-slate-400">Pozwala na integrację z repozytoriami GitHub (PR, Issue) oraz rendering stron internetowych przez bezgłową przeglądarkę Chromium.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- CHAPTER 7: REST API & CLI REFERENCE -->
+      <div x-show="(guideActiveChapter === 'all' || guideActiveChapter === 'api_cli') && guideMatches('rest api cli referencja komendy endpointy terminal beherit serve list run health mcp')" class="bg-slate-900 border border-slate-800 rounded-2xl p-5 sm:p-6 space-y-5 shadow-sm">
+        <div class="flex items-center gap-2.5 pb-3 border-b border-slate-800">
+          <span class="text-xl">⚙️</span>
+          <div>
+            <h3 class="text-lg font-bold text-slate-100">7. Referencja REST API i Poleceń Terminalowych (CLI)</h3>
+            <p class="text-xs text-slate-400">Zestawienie najważniejszych punktów końcowych API oraz komend wiersza poleceń.</p>
+          </div>
+        </div>
+
+        <div class="space-y-4 text-xs sm:text-sm">
+          <div class="overflow-x-auto">
+            <table class="w-full text-left text-xs text-slate-300 border border-slate-800 rounded-xl overflow-hidden">
+              <thead class="bg-slate-950/80 text-slate-400 border-b border-slate-800">
+                <tr>
+                  <th class="px-3 py-2 w-20">Metoda</th>
+                  <th class="px-3 py-2 w-56 font-mono">Ścieżka API</th>
+                  <th class="px-3 py-2">Przeznaczenie</th>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-slate-800/60 bg-slate-950/40 font-mono text-[11px]">
+                <tr>
+                  <td class="px-3 py-2 text-sky-400 font-bold">GET</td>
+                  <td class="px-3 py-2 text-slate-200">/api/health</td>
+                  <td class="px-3 py-2 font-sans text-xs text-slate-400">Stan serwera, wersja i aktywny katalog roboczy agentów.</td>
+                </tr>
+                <tr>
+                  <td class="px-3 py-2 text-sky-400 font-bold">GET</td>
+                  <td class="px-3 py-2 text-slate-200">/api/agents</td>
+                  <td class="px-3 py-2 font-sans text-xs text-slate-400">Zwraca listę wszystkich zarejestrowanych agentów.</td>
+                </tr>
+                <tr>
+                  <td class="px-3 py-2 text-emerald-400 font-bold">POST</td>
+                  <td class="px-3 py-2 text-slate-200">/api/agents</td>
+                  <td class="px-3 py-2 font-sans text-xs text-slate-400">Tworzy nowego agenta na dysku.</td>
+                </tr>
+                <tr>
+                  <td class="px-3 py-2 text-emerald-400 font-bold">POST</td>
+                  <td class="px-3 py-2 text-slate-200">/api/agents/{slug}/chat</td>
+                  <td class="px-3 py-2 font-sans text-xs text-slate-400">Strumieniowy punkt czatu w czasie rzeczywistym (SSE).</td>
+                </tr>
+                <tr>
+                  <td class="px-3 py-2 text-rose-400 font-bold">POST</td>
+                  <td class="px-3 py-2 text-slate-200">/api/agents/{slug}/chat/cancel</td>
+                  <td class="px-3 py-2 font-sans text-xs text-slate-400">Natychmiast przerywa aktywne generowanie odpowiedzi.</td>
+                </tr>
+                <tr>
+                  <td class="px-3 py-2 text-emerald-400 font-bold">POST</td>
+                  <td class="px-3 py-2 text-slate-200">/api/agents/{slug}/run</td>
+                  <td class="px-3 py-2 font-sans text-xs text-slate-400">Uniwersalny webhook dla n8n z zapisem do pliku i callbackiem.</td>
+                </tr>
+                <tr>
+                  <td class="px-3 py-2 text-emerald-400 font-bold">POST</td>
+                  <td class="px-3 py-2 text-slate-200">/api/agents/{slug}/run-now</td>
+                  <td class="px-3 py-2 font-sans text-xs text-slate-400">Doraźne uruchomienie zadania cron lub promptu ad-hoc.</td>
+                </tr>
+                <tr>
+                  <td class="px-3 py-2 text-emerald-400 font-bold">POST</td>
+                  <td class="px-3 py-2 text-slate-200">/api/agents/{slug}/auth/test</td>
+                  <td class="px-3 py-2 font-sans text-xs text-slate-400">Testuje ważność poświadczeń agenta (Auth Healthcheck).</td>
+                </tr>
+                <tr>
+                  <td class="px-3 py-2 text-sky-400 font-bold">GET</td>
+                  <td class="px-3 py-2 text-slate-200">/api/history</td>
+                  <td class="px-3 py-2 font-sans text-xs text-slate-400">Zwraca listę wykonanych audytów z bazy SQLite.</td>
+                </tr>
+                <tr>
+                  <td class="px-3 py-2 text-sky-400 font-bold">GET</td>
+                  <td class="px-3 py-2 text-slate-200">/api/reports/artifact</td>
+                  <td class="px-3 py-2 font-sans text-xs text-slate-400">Bezpieczny streaming wygenerowanych obrazów, filmów i plików.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <div class="space-y-1.5 pt-2">
+            <span class="font-bold text-xs text-slate-200">Podstawowe polecenia narzędzia CLI `beherit`:</span>
+            <pre class="bg-slate-950 p-3 rounded-xl border border-slate-800 text-[11px] font-mono text-slate-300 space-y-1">
+<div><span class="text-emerald-400">beherit serve --host 0.0.0.0 --port 8650</span>   # Uruchamia serwer aplikacji</div>
+<div><span class="text-emerald-400">beherit list</span>                                # Wyświetla tabelę zarejestrowanych agentów</div>
+<div><span class="text-emerald-400">beherit run &lt;slug&gt; --prompt "..."</span>           # Wykonuje zadanie agenta z poziomu terminala</div>
+<div><span class="text-emerald-400">beherit health</span>                              # Sprawdza status środowiska i bazy danych</div>
+<div><span class="text-emerald-400">beherit mcp --agent-slug &lt;slug&gt;</span>             # Startuje wbudowany serwer MCP Stdio</div></pre>
+          </div>
+        </div>
+      </div>
+
+      <!-- CHAPTER 8: FAQ & TROUBLESHOOTING -->
+      <div x-show="(guideActiveChapter === 'all' || guideActiveChapter === 'faq') && guideMatches('faq pomoc pytania błędy rozwiązywanie problemów pin hasło obsidian tailscale iphone pdf')" class="bg-slate-900 border border-slate-800 rounded-2xl p-5 sm:p-6 space-y-4 shadow-sm">
+        <div class="flex items-center gap-2.5 pb-3 border-b border-slate-800">
+          <span class="text-xl">❓</span>
+          <div>
+            <h3 class="text-lg font-bold text-slate-100">8. Najczęściej Zadawane Pytania (FAQ) i Rozwiązywanie Problemów</h3>
+            <p class="text-xs text-slate-400">Szybkie odpowiedzi na typowe pytania konfiguracyjne i diagnostyka błędów.</p>
+          </div>
+        </div>
+
+        <div class="space-y-3 text-xs sm:text-sm">
+          <div class="bg-slate-950/60 p-4 rounded-xl border border-slate-800 space-y-1.5">
+            <h4 class="font-bold text-slate-100 flex items-center gap-1.5">
+              <span>Q:</span> Jak zsynchronizować agentów ze swoim sejfem Obsidian?
+            </h4>
+            <p class="text-slate-400 text-xs leading-relaxed">
+              Otwórz plik <code class="text-slate-200">.env</code> w katalogu Beherit i ustaw zmienną <code class="text-emerald-400">BEHERIT_AGENTS_DIR=/sciezka/do/twojego/sejfu/Obsidian/Agenci</code>. Po zrestartowaniu aplikacji wszyscy nowi agenci oraz ich raporty pojawią się bezpośrednio w Twoim skarbcu notatek.
+            </p>
+          </div>
+
+          <div class="bg-slate-950/60 p-4 rounded-xl border border-slate-800 space-y-1.5">
+            <h4 class="font-bold text-slate-100 flex items-center gap-1.5">
+              <span>Q:</span> Dlaczego odznaka połączenia agenta świeci się na czerwono lub żółto?
+            </h4>
+            <p class="text-slate-400 text-xs leading-relaxed">
+              Żółta odznaka oznacza, że sesja wygasła (np. minął czas tokena CLI). Kliknij przycisk <span class="text-slate-200 font-semibold">🔑 Klucz</span> na karcie agenta i ponownie wybierz <em>„Użyj sesji z serwera”</em> lub wklej aktualny klucz API, a następnie kliknij <em>„Przetestuj połączenie”</em>.
+            </p>
+          </div>
+
+          <div class="bg-slate-950/60 p-4 rounded-xl border border-slate-800 space-y-1.5">
+            <h4 class="font-bold text-slate-100 flex items-center gap-1.5">
+              <span>Q:</span> Jak zabezpieczyć panel kodem PIN przed niepowołanym dostępem?
+            </h4>
+            <p class="text-slate-400 text-xs leading-relaxed">
+              W pliku <code class="text-slate-200">.env</code> ustaw zmienną <code class="text-emerald-400">BEHERIT_ACCESS_TOKEN=twoj-tajny-kod-pin</code>. Po restarcie panel wyświetli ekran blokady wymagający podania PINu, a zapytania API bez nagłówka autoryzacji zwrócą kod 401 Unauthorized.
+            </p>
+          </div>
+
+          <div class="bg-slate-950/60 p-4 rounded-xl border border-slate-800 space-y-1.5">
+            <h4 class="font-bold text-slate-100 flex items-center gap-1.5">
+              <span>Q:</span> Jak korzystać z Beherit na telefonie iPhone poza domem?
+            </h4>
+            <p class="text-slate-400 text-xs leading-relaxed">
+              Włącz aplikację <strong>Tailscale</strong> na telefonie oraz na serwerze Beherit. Wpisz w przeglądarce Safari adres Tailscale serwera z portem 8650 (np. <code class="text-slate-200">http://100.121.196.113:8650</code>). Następnie wybierz opcję <em>Udostępnij ➔ Do ekranu początkowego</em>, aby uzyskać pełnoekranową aplikację PWA.
+            </p>
+          </div>
+        </div>
+      </div>
+    </section>
 
   <!-- MODAL: KREATOR NOWEGO AGENTA -->
   <div x-show="openCreateModal" class="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4" style="display: none;">
@@ -1527,6 +2201,10 @@
         currentReportArtifacts: [],
         isFetchingModels: false,
 
+        // User Guide & Manual
+        guideActiveChapter: 'all',
+        guideSearchQuery: '',
+
         // MCP Catalog Presets (BEH-044)
         mcpPresets: [
           {
@@ -1803,6 +2481,11 @@
           if (view === 'reports') {
             await this.loadHistory();
           }
+        },
+
+        guideMatches(text) {
+          if (!this.guideSearchQuery || !this.guideSearchQuery.trim()) return true;
+          return (text || '').toLowerCase().includes(this.guideSearchQuery.toLowerCase().trim());
         },
 
         async loadAgents() {
