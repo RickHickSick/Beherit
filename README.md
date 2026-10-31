@@ -8,6 +8,7 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/)
+[![Version: 0.3.2](https://img.shields.io/badge/version-0.3.2-emerald.svg)](CHANGELOG.md)
 [![Architecture: Markdown-First](https://img.shields.io/badge/architecture-markdown--first-success.svg)]()
 [![Zero API Token Costs](https://img.shields.io/badge/cost-zero_api_tokens-brightgreen.svg)]()
 
@@ -29,6 +30,10 @@
   Leverages desktop and cloud Agent SDK sessions instead of per-token API billing.
 * 📱 **Mobile PWA First (Safari iOS & Desktop):**
   Designed for seamless interaction on mobile devices (iOS safe-area, 100dvh, haptic feedback) with real-time SSE streaming, reasoning thoughts visibility, tool-call inspection, and stream cancellation (Stop button).
+* 💬 **Chat Session Management (v0.3.2):**
+  Create named conversation threads, edit titles on the fly, and safely delete chats with cascading SQLite message cleanup.
+* 📖 **In-App Interactive Manual & Guide (v0.3.2):**
+  Full-featured documentation view right inside the application with instant live search and chapter filters. Also available in [docs/MANUAL.md](docs/MANUAL.md).
 * ⏰ **Dual Operational Modes:**
   * **Interactive Live Chat:** Multi-turn conversational threads with instant Abort / Stream cancellation.
   * **Autonomous Background Scheduler:** Periodic cron execution for automated audits, database maintenance, or data polling with multi-channel reports.

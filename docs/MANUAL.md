@@ -1,9 +1,9 @@
 # Beherit — Oficjalny Podręcznik Użytkownika i Instrukcja Obsługi
 
-> **Wersja:** v0.3.0  
+> **Wersja:** v0.3.2  
 > **Projekt:** Beherit — Autonomiczna Platforma Agentów AI  
 > **Architektura:** Markdown-First · Per-Agent SDK Isolation · Zero API Token Costs · Local Hybrid RAG  
-> **Zarządzanie Zadaniami:** System Plane (`BEH-000` do `BEH-056`)
+> **Zarządzanie Zadaniami:** System Plane (`BEH-000` do `BEH-059`)
 
 ---
 
@@ -346,11 +346,14 @@ W tej sekcji szczegółowo wyjaśniono działanie każdego przycisku, pola i okn
 
 ---
 
-### Okno Czatu (Wątki, Myśli, Narzędzia, Stop)
+### Okno Czatu (Zarządzanie Wątkami, Myśli, Narzędzia, Stop)
 
 | Element okna czatu | Co dokładnie robi ta funkcja? |
 | :--- | :--- |
-| **Selektor Sesji / Wątku** | Pozwala przełączać się między wieloma wątkami rozmowy z tym samym agentem lub utworzyć nowy czysty wątek (`+ Nowy Wątek`). |
+| **Selektor Sesji / Wątku** | Pozwala wybierać i przełączać się między wieloma wątkami rozmowy z danym agentem bez utraty historii. |
+| **Przycisk `+ Nowy Czat`** | Otwiera dialog modalny tworzenia nowego wątku z możliwością nadania własnego, czytelnego tytułu rozmowy. |
+| **Przycisk `✏️` (Edycja tytułu)** | Pozwala na zmianę nazwy aktywnego wątku czatu z natychmiastowym zapisem w bazie SQLite (`PATCH /api/agents/{slug}/chats/{session_id}`). |
+| **Przycisk `🗑️` (Usuń czat)** | Trwale usuwa aktywny wątek rozmowy wraz z kaskadowym usunięciem wszystkich jego wiadomości z bazy danych (`DELETE /api/agents/{slug}/chats/{session_id}`). |
 | **Strumień Odpowiedzi (SSE)** | Wyświetla odpowiedź modelu generowaną w czasie rzeczywistym bez oczekiwania na zakończenie całego bloku tekstu. |
 | **Zwijany Akordeon Myśli (*Thinking*)** | Ukrywa lub rozwija tok wewnętrznego rozumowania modelu AI, zapobiegając zanieczyszczeniu treści końcowej. |
 | **Karty Wywołań Narzędzi (*Tool Calls*)** | Prezentują nazwę uruchomionego narzędzia, przekazane parametry oraz status wykonania. |
@@ -545,3 +548,32 @@ Po restarcie aplikacji agenci będą tworzeni bezpośrednio w wybranym folderze 
 **O:** 1) Sprawdź w modalu wiedzy (`📚 Wiedza`), czy plik ma status poprawnie przetworzonego.  
 2) Przejdź do zakładki *Test RAG* w modalu wiedzy i wpisz słowa kluczowe — sprawdź, czy silnik BM25 zwraca fragmenty pliku.  
 3) Upewnij się, że w konfiguracji agenta uprawnienie `file_read` jest włączone.
+
+---
+
+## 9. Historia Wydań i Dziennik Zmian (Changelog)
+
+### Wersja v0.3.2 (2026-10-31)
+* **Zarządzanie wątkami czatu (`BEH-058`):**
+  * Możliwość tworzenia nowej nazwanej rozmowy za pomocą przycisku `+ Nowy Czat` z modalnym oknem nadawania tytułu.
+  * Edycja i zmiana nazwy aktywnego wątku czatu (`✏️`) z natychmiastowym zapisem przez `PATCH /api/agents/{slug}/chats/{session_id}`.
+  * Bezpieczne, trwałe usuwanie wątków rozmowy (`🗑️`) z kaskadowym czyszczeniem powiązanych wiadomości z tabeli `chat_messages` bazy SQLite (`DELETE /api/agents/{slug}/chats/{session_id}`).
+* **Interaktywna instrukcja obsługi w aplikacji (`BEH-057`):**
+  * Dedykowany widok `currentView === 'manual'` zintegrowany z głównym paskiem nawigacji oraz szybkim skrótem `📖 Instrukcja Obsługi` na pulpicie.
+  * Wyszukiwarka na żywo (`guideSearchQuery`) filtrująca 8 rozdziałów i tabele słownika funkcji w czasie rzeczywistym.
+  * Szczegółowy słownik wszystkich przycisków, przełączników i pól formularzy.
+* **Ochrona przed buforowaniem przeglądarki:**
+  * Nagłówki `Cache-Control: no-cache, no-store, must-revalidate` na trasie `/` eliminujące problemy z pamięcią podręczną w Safari iOS i na desktopie.
+* **Dokumentacja i zadania:**
+  * Utworzenie oficjalnego podręcznika `docs/MANUAL.md` i notatek w Obsidianie, rejestracja zadań `BEH-057`, `BEH-058` oraz `BEH-059` w systemie Plane.
+
+### Wersja v0.3.0 (2026-10-25)
+* **Ekosystem n8n i uniwersalny Webhook REST (`BEH-048` do `BEH-050`):**
+  * Punkt końcowy `POST /api/agents/{slug}/run` z parametrami `context`, `destination_file`, `file_mode`, `save_report`, `callback_url`, `async_execution`.
+  * Interaktywne centrum integracji z n8n w panelu agenta z generatorem cURL i węzłów JSON.
+* **Harmonogram Multi-Cron (`BEH-045` do `BEH-046`):**
+  * Obsługa wielu niezależnych reguł Cron per agent, wywoływanie konkretnych zadań oraz promptów ad-hoc.
+* **Multimodalne raporty i artefakty (`BEH-047`):**
+  * Autodetekcja wykresów, tabel i obrazów generowanych przez agentów, streaming przez `GET /api/reports/artifact`.
+* **Klocki MCP:**
+  * 7 gotowych presetów narzędzi Model Context Protocol (Brave Search, PostgreSQL, SQLite, itp.).
