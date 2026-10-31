@@ -471,6 +471,19 @@ class CapabilitiesGuard:
         except Exception:
             pass
 
+        # Obsidian Wikilinks Graph RAG tool (BEH-067)
+        raw_tools.append({
+            "name": "query_knowledge_graph",
+            "description": "Przeszukuje graf wiedzy powiązań wikilinków Obsidiana ([[...]]). Umożliwia pobranie całej sieci pojęć lub analizę połączeń (1-hop / 2-hop / backlinks) dla wybranej notatki.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "doc_name": {"type": "string", "description": "Opcjonalna nazwa dokumentu bazowego do analizy powiązań (np. 'architektura.md'). Przy braku zwraca strukturę całego grafu."},
+                    "max_hops": {"type": "integer", "description": "Maksymalny zasięg ekspansji grafu (domyślnie 2)"}
+                }
+            }
+        })
+
         if not raw_tools:
             return None
 
@@ -721,8 +734,28 @@ class CapabilitiesGuard:
             skill_args = args.get("args") if "args" in args else (args if args else None)
             timeout = args.get("timeout", 60)
             return await smgr.execute_skill(agent, skill_name, args=skill_args, timeout=timeout)
+        elif tool_name == "query_knowledge_graph":
+            from beherit.core.rag import KnowledgeRAG
+            rag = KnowledgeRAG()
+            doc_name = args.get("doc_name")
+            max_hops = args.get("max_hops", 2)
+            if doc_name:
+                backlinks = rag.get_document_backlinks(agent.slug, doc_name)
+                expansion = rag.expand_graph(agent.slug, [doc_name], max_hops=max_hops)
+                return {
+                    "success": True,
+                    "doc_name": doc_name,
+                    "backlinks": backlinks,
+                    "graph_expansion": expansion,
+                }
+            else:
+                graph = rag.get_graph(agent.slug)
+                return {
+                    "success": True,
+                    "graph": graph,
+                }
         else:
             return {
                 "success": False,
-                "error": f"Unknown tool '{tool_name}'. Available: execute_bash, read_file, write_file, list_dir, call_agent, save_memory, recall_memory, forget_memory, manage_todo, plane_list_issues, plane_create_issue, plane_update_state, list_skills, run_skill",
+                "error": f"Unknown tool '{tool_name}'. Available: execute_bash, read_file, write_file, list_dir, call_agent, save_memory, recall_memory, forget_memory, manage_todo, plane_list_issues, plane_create_issue, plane_update_state, list_skills, run_skill, query_knowledge_graph",
             }

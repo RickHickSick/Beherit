@@ -240,6 +240,19 @@ class MCPServer:
         except Exception:
             pass
 
+        # Obsidian Wikilinks Graph RAG tool (BEH-067)
+        tools.append({
+            "name": "query_knowledge_graph",
+            "description": "Przeszukuje graf wiedzy powiązań wikilinków Obsidiana ([[...]]). Umożliwia pobranie całej sieci pojęć lub analizę połączeń (1-hop / 2-hop / backlinks) dla wybranej notatki.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "doc_name": {"type": "string", "description": "Opcjonalna nazwa dokumentu bazowego (np. 'architektura.md'). Przy braku zwraca strukturę całego grafu."},
+                    "max_hops": {"type": "integer", "description": "Maksymalny zasięg ekspansji grafu (domyślnie 2)"}
+                }
+            }
+        })
+
         return tools
 
     async def handle_request(self, message: dict[str, Any]) -> dict[str, Any] | None:

@@ -67,6 +67,47 @@ def extract_file_content(file_path: Path) -> str:
     return f"### [Plik: {file_path.name}]\nPlik binarny w bazie wiedzy agenta ({file_path.stat().st_size} bajtów)."
 
 
+def extract_wikilinks(text: str) -> list[tuple[str, str]]:
+    """
+    Extract Obsidian wikilinks from markdown or text content.
+    Handles standard formats:
+    - [[note]]
+    - [[note|Custom Display Title]]
+    - [[note#Section Heading]]
+    - [[note#Section Heading|Custom Display Title]]
+    Returns list of (target_name, link_text_or_alias).
+    """
+    pattern = r"\[\[([^\]|#\n]+)(?:#[^\]|\n]+)?(?:\|([^\]\n]+))?\]\]"
+    matches = re.findall(pattern, text)
+    results = []
+    for target, alias in matches:
+        target_clean = target.strip()
+        alias_clean = alias.strip() if alias else ""
+        if target_clean:
+            results.append((target_clean, alias_clean))
+    return results
+
+
+def normalize_doc_name(target: str, existing_docs: dict[str, Path] | None = None) -> str:
+    """Resolve a wikilink target to an existing document filename in knowledge/, or canonicalized name."""
+    t = target.strip()
+    if not existing_docs:
+        return f"{t}.md" if not t.endswith(tuple(ALL_KNOWLEDGE_EXTENSIONS)) else t
+
+    if t in existing_docs:
+        return t
+    if f"{t}.md" in existing_docs:
+        return f"{t}.md"
+
+    # Case-insensitive check
+    t_lower = t.lower()
+    for name in existing_docs:
+        if name.lower() == t_lower or name.lower() == f"{t_lower}.md" or Path(name).stem.lower() == t_lower:
+            return name
+
+    return f"{t}.md" if not t.endswith(tuple(ALL_KNOWLEDGE_EXTENSIONS)) else t
+
+
 class KnowledgeChunker:
     """Splits knowledge base documents into semantically coherent overlapping chunks."""
 
@@ -165,6 +206,7 @@ class KnowledgeRAG:
                 if old_doc not in current_files:
                     conn.execute("DELETE FROM knowledge_chunks WHERE agent_slug = ? AND doc_name = ?", (agent_slug, old_doc))
                     conn.execute("DELETE FROM knowledge_fts WHERE agent_slug = ? AND doc_name = ?", (agent_slug, old_doc))
+                    conn.execute("DELETE FROM knowledge_links WHERE agent_slug = ? AND (source_doc = ? OR target_doc = ?)", (agent_slug, old_doc, old_doc))
 
             # Index new or modified files
             for doc_name, doc_file in current_files.items():
@@ -175,10 +217,23 @@ class KnowledgeRAG:
                 if doc_name not in indexed_docs or mtime > last_idx:
                     conn.execute("DELETE FROM knowledge_chunks WHERE agent_slug = ? AND doc_name = ?", (agent_slug, doc_name))
                     conn.execute("DELETE FROM knowledge_fts WHERE agent_slug = ? AND doc_name = ?", (agent_slug, doc_name))
+                    conn.execute("DELETE FROM knowledge_links WHERE agent_slug = ? AND source_doc = ?", (agent_slug, doc_name))
 
                     content = extract_file_content(doc_file)
                     if not content or not content.strip():
                         continue
+
+                    # Extract and index Obsidian wikilinks (BEH-067 Graph RAG)
+                    wikilinks = extract_wikilinks(content)
+                    for target_raw, alias in wikilinks:
+                        target_resolved = normalize_doc_name(target_raw, current_files)
+                        conn.execute(
+                            """
+                            INSERT OR IGNORE INTO knowledge_links (agent_slug, source_doc, target_doc, link_text, created_at)
+                            VALUES (?, ?, ?, ?, ?)
+                            """,
+                            (agent_slug, doc_name, target_resolved, alias or target_raw, now),
+                        )
 
                     chunks = self.chunker.split_text(content)
                     for idx, chunk_text in enumerate(chunks):
@@ -290,6 +345,118 @@ class KnowledgeRAG:
         results.sort(key=lambda x: x["score"], reverse=True)
         return results[:top_k]
 
+    def get_graph(self, agent_slug: str) -> dict[str, Any]:
+        """Return all nodes and directed edges forming the Obsidian knowledge graph (BEH-067)."""
+        with self.db._get_connection() as conn:
+            doc_rows = conn.execute(
+                "SELECT DISTINCT doc_name FROM knowledge_chunks WHERE agent_slug = ?",
+                (agent_slug,),
+            ).fetchall()
+            existing_docs = {r["doc_name"] for r in doc_rows}
+
+            link_rows = conn.execute(
+                "SELECT source_doc, target_doc, link_text FROM knowledge_links WHERE agent_slug = ?",
+                (agent_slug,),
+            ).fetchall()
+
+            all_node_names = set(existing_docs)
+            edges = []
+            for r in link_rows:
+                s = r["source_doc"]
+                t = r["target_doc"]
+                all_node_names.add(s)
+                all_node_names.add(t)
+                edges.append({
+                    "source": s,
+                    "target": t,
+                    "label": r["link_text"] or "",
+                })
+
+            nodes = []
+            for n in sorted(all_node_names):
+                nodes.append({
+                    "id": n,
+                    "label": Path(n).stem,
+                    "exists": n in existing_docs,
+                    "type": "document" if n in existing_docs else "unresolved",
+                })
+
+            return {
+                "agent_slug": agent_slug,
+                "total_nodes": len(nodes),
+                "total_edges": len(edges),
+                "nodes": nodes,
+                "edges": edges,
+            }
+
+    def expand_graph(
+        self,
+        agent_slug: str,
+        seed_docs: list[str],
+        max_hops: int = 2,
+    ) -> dict[str, dict[str, Any]]:
+        """
+        Perform 1-hop and 2-hop graph expansion for a list of seed documents (BEH-067).
+        Traverses outgoing wikilinks and incoming backlinks.
+        """
+        expanded: dict[str, dict[str, Any]] = {}
+        visited = set(seed_docs)
+        current_layer = list(seed_docs)
+
+        with self.db._get_connection() as conn:
+            for hop in range(1, max_hops + 1):
+                if not current_layer:
+                    break
+                next_layer = []
+
+                for doc in current_layer:
+                    # 1. Outgoing links (doc -> target)
+                    out_rows = conn.execute(
+                        "SELECT target_doc, link_text FROM knowledge_links WHERE agent_slug = ? AND source_doc = ?",
+                        (agent_slug, doc),
+                    ).fetchall()
+                    for r in out_rows:
+                        tgt = r["target_doc"]
+                        if tgt not in visited:
+                            visited.add(tgt)
+                            next_layer.append(tgt)
+                            expanded[tgt] = {
+                                "hops": hop,
+                                "connected_to": doc,
+                                "direction": "outgoing",
+                                "link_text": r["link_text"],
+                            }
+
+                    # 2. Incoming links / Backlinks (source -> doc)
+                    in_rows = conn.execute(
+                        "SELECT source_doc, link_text FROM knowledge_links WHERE agent_slug = ? AND target_doc = ?",
+                        (agent_slug, doc),
+                    ).fetchall()
+                    for r in in_rows:
+                        src = r["source_doc"]
+                        if src not in visited:
+                            visited.add(src)
+                            next_layer.append(src)
+                            expanded[src] = {
+                                "hops": hop,
+                                "connected_to": doc,
+                                "direction": "incoming",
+                                "link_text": r["link_text"],
+                            }
+
+                current_layer = next_layer
+
+        return expanded
+
+    def get_document_backlinks(self, agent_slug: str, doc_name: str) -> list[dict[str, str]]:
+        """Return all documents that link to the specified document via Obsidian wikilinks."""
+        with self.db._get_connection() as conn:
+            in_rows = conn.execute(
+                "SELECT source_doc, link_text FROM knowledge_links WHERE agent_slug = ? AND target_doc = ?",
+                (agent_slug, doc_name),
+            ).fetchall()
+            return [{"source_doc": r["source_doc"], "link_text": r["link_text"] or ""} for r in in_rows]
+
     def build_knowledge_context(
         self,
         agent: AgentModel,
@@ -370,6 +537,15 @@ class KnowledgeRAG:
         if other_list:
             catalog_lines.append("**Inne pliki:**\n" + "\n".join(other_list))
 
+        # Ingest knowledge graph edges summary (BEH-067)
+        graph_data = self.get_graph(agent.slug)
+        if graph_data.get("edges"):
+            edge_samples = [
+                f"- [[{e['source']}]] ──({e['label'] or 'wikilink'})──> [[{e['target']}]]"
+                for e in graph_data["edges"][:12]
+            ]
+            catalog_lines.append("**🕸️ Sieć powiązań wiedzy (Obsidian Wikilinks):**\n" + "\n".join(edge_samples))
+
         catalog_str = "\n\n".join(catalog_lines)
 
         header = (
@@ -413,6 +589,33 @@ class KnowledgeRAG:
             rel_pct = int(m["score"] * 100)
             rag_parts.append(
                 f"#### [Źródło: {m['doc_name']} | Fragment #{m['chunk_index'] + 1}] (Relewantność: {rel_pct}%)\n{m['content']}"
+            )
+
+        # Graph RAG Expansion (BEH-067)
+        matched_doc_names = list(dict.fromkeys(m["doc_name"] for m in matches))
+        graph_expansions = self.expand_graph(agent.slug, matched_doc_names, max_hops=2)
+
+        graph_sections = []
+        if graph_expansions:
+            with self.db._get_connection() as conn:
+                for linked_doc, meta in list(graph_expansions.items())[:5]:
+                    chunk_row = conn.execute(
+                        "SELECT content FROM knowledge_chunks WHERE agent_slug = ? AND doc_name = ? ORDER BY chunk_index ASC LIMIT 1",
+                        (agent.slug, linked_doc),
+                    ).fetchone()
+                    if chunk_row:
+                        hop_label = "1-hop" if meta["hops"] == 1 else "2-hop"
+                        dir_label = "odwołuje się do" if meta["direction"] == "outgoing" else "jest cytowany przez"
+                        sample_content = chunk_row["content"][:1000]
+                        graph_sections.append(
+                            f"##### [Powiązana notatka grafu ({hop_label}): {linked_doc}] ({meta['connected_to']} {dir_label} {linked_doc})\n{sample_content}"
+                        )
+
+        if graph_sections:
+            rag_parts.append(
+                "### 🕸️ Graf Powiązań Wiedzy (Graph RAG - Połączone Notatki Obsidian):\n"
+                "*Poniższe notatki zostały automatycznie połączone poprzez sieć wikilinków [[...]] z głównymi dokumentami zapytania (1-hop / 2-hop):*\n"
+                + "\n\n".join(graph_sections)
             )
 
         return "\n\n".join(rag_parts)

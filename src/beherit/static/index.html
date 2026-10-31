@@ -1764,6 +1764,11 @@
                 class="pb-2 px-3 transition flex items-center gap-1.5">
           <span>🔗</span> Dodaj Link / Wideo YT
         </button>
+        <button @click="knowledgeTab = 'graph'; loadKnowledgeGraph(); haptic();" 
+                :class="knowledgeTab === 'graph' ? 'border-b-2 border-emerald-500 text-emerald-400 font-bold' : 'text-slate-400 hover:text-slate-200'"
+                class="pb-2 px-3 transition flex items-center gap-1.5">
+          <span>🕸️</span> Graf Wiedzy (Wikilinks)
+        </button>
         <button @click="knowledgeTab = 'rag'; haptic();" 
                 :class="knowledgeTab === 'rag' ? 'border-b-2 border-emerald-500 text-emerald-400 font-bold' : 'text-slate-400 hover:text-slate-200'"
                 class="pb-2 px-3 transition flex items-center gap-1.5">
@@ -1962,6 +1967,88 @@
               <p class="text-slate-300 font-mono whitespace-pre-wrap text-[11px]" x-text="item.content"></p>
             </div>
           </template>
+        </div>
+      </div>
+
+      <!-- TAB 4: Knowledge Graph (Obsidian Wikilinks - BEH-067) -->
+      <div x-show="knowledgeTab === 'graph'" class="flex-1 flex flex-col gap-3 min-h-[380px] overflow-hidden">
+        <div class="flex items-center justify-between p-3 bg-slate-950/60 border border-slate-800 rounded-xl text-xs">
+          <div class="flex items-center gap-4">
+            <span class="text-slate-400">Węzły dokumentów: <strong class="text-emerald-400" x-text="knowledgeGraph.total_nodes || 0"></strong></span>
+            <span class="text-slate-400">Połączenia (Wikilinks): <strong class="text-amber-400" x-text="knowledgeGraph.total_edges || 0"></strong></span>
+          </div>
+          <button @click="loadKnowledgeGraph()" class="text-xs text-slate-400 hover:text-emerald-400 flex items-center gap-1">
+            🔄 Odśwież graf
+          </button>
+        </div>
+
+        <div class="flex-1 flex flex-col sm:flex-row gap-3 overflow-hidden">
+          <!-- Left: Node list -->
+          <div class="w-full sm:w-1/2 flex flex-col border border-slate-800 rounded-xl bg-slate-950/60 overflow-hidden">
+            <div class="p-2 border-b border-slate-800 bg-slate-900/60 text-[11px] font-semibold text-slate-300">
+              Notatki w bazie wiedzy:
+            </div>
+            <div class="flex-1 overflow-y-auto custom-scroll p-2 space-y-1">
+              <template x-if="!knowledgeGraph.nodes || knowledgeGraph.nodes.length === 0">
+                <div class="p-4 text-center text-slate-500 text-xs">Brak zindeksowanych dokumentów w grafie wiedzy.</div>
+              </template>
+              <template x-for="node in knowledgeGraph.nodes" :key="node.id">
+                <div @click="selectedGraphNode = node.id" 
+                     :class="selectedGraphNode === node.id ? 'bg-emerald-500/10 border-emerald-500/40 text-emerald-300' : 'bg-slate-900/60 border-slate-800 text-slate-300 hover:bg-slate-800/60'"
+                     class="p-2 rounded-lg border text-xs cursor-pointer transition flex items-center justify-between">
+                  <span class="font-mono" x-text="node.label"></span>
+                  <span class="text-[10px] px-1.5 py-0.5 rounded"
+                        :class="node.exists ? 'bg-emerald-500/20 text-emerald-400' : 'bg-amber-500/20 text-amber-400'"
+                        x-text="node.exists ? 'dokument' : 'unresolved'"></span>
+                </div>
+              </template>
+            </div>
+          </div>
+
+          <!-- Right: Selected node relations -->
+          <div class="w-full sm:w-1/2 flex flex-col border border-slate-800 rounded-xl bg-slate-950/60 p-3 overflow-y-auto custom-scroll space-y-3">
+            <template x-if="!selectedGraphNode">
+              <div class="text-center py-10 text-slate-500 text-xs">
+                Wybierz notatkę z listy po lewej, aby zobaczyć powiązania 1-hop / 2-hop i linki zwrotne (backlinks).
+              </div>
+            </template>
+            <template x-if="selectedGraphNode">
+              <div class="space-y-3 text-xs">
+                <div class="border-b border-slate-800 pb-2">
+                  <span class="text-slate-400">Wybrana notatka:</span>
+                  <h4 class="text-sm font-bold text-emerald-400 font-mono" x-text="selectedGraphNode"></h4>
+                </div>
+
+                <!-- Outgoing Links -->
+                <div>
+                  <h5 class="font-semibold text-slate-300 text-[11px] mb-1">🔗 Linki wychodzące ([[...]]):</h5>
+                  <div class="space-y-1">
+                    <template x-for="edge in getOutgoingEdges(selectedGraphNode)" :key="edge.target">
+                      <div class="p-1.5 bg-slate-900 rounded border border-slate-800 flex items-center justify-between text-[11px]">
+                        <span class="font-mono text-amber-300" x-text="`→ [[${edge.target}]]`"></span>
+                        <span class="text-slate-500 italic text-[10px]" x-text="edge.label || 'wikilink'"></span>
+                      </div>
+                    </template>
+                    <div x-show="getOutgoingEdges(selectedGraphNode).length === 0" class="text-slate-500 text-[11px] italic">Brak linków wychodzących.</div>
+                  </div>
+                </div>
+
+                <!-- Backlinks -->
+                <div>
+                  <h5 class="font-semibold text-slate-300 text-[11px] mb-1">🔙 Linki przychodzące (Backlinks):</h5>
+                  <div class="space-y-1">
+                    <template x-for="edge in getIncomingEdges(selectedGraphNode)" :key="edge.source">
+                      <div class="p-1.5 bg-slate-900 rounded border border-slate-800 flex items-center justify-between text-[11px]">
+                        <span class="font-mono text-sky-300" x-text="`← [[${edge.source}]]`"></span>
+                        <span class="text-slate-500 italic text-[10px]" x-text="edge.label || 'cytowanie'"></span>
+                      </div>
+                    </template>
+                    <div x-show="getIncomingEdges(selectedGraphNode).length === 0" class="text-slate-500 text-[11px] italic">Brak cytowań z innych notatek.</div>
+                  </div>
+                </div>
+              </div>
+            </template>
+          </div>
         </div>
       </div>
 
@@ -2692,6 +2779,10 @@
         },
         ragSearchQuery: '',
         ragSearchResults: [],
+
+        // Knowledge Graph (BEH-067)
+        knowledgeGraph: { total_nodes: 0, total_edges: 0, nodes: [], edges: [] },
+        selectedGraphNode: null,
 
         // Auth Modal
         openAuthModal: false,
@@ -4004,6 +4095,33 @@
         filteredKnowledgeFiles() {
           if (this.knowledgeFilter === 'all') return this.knowledgeFiles;
           return this.knowledgeFiles.filter(f => f.file_type === this.knowledgeFilter);
+        },
+
+        // Knowledge Graph (BEH-067)
+        async loadKnowledgeGraph() {
+          if (!this.knowledgeTargetAgent) return;
+          try {
+            const res = await this.apiFetch(`/api/agents/${this.knowledgeTargetAgent.slug}/knowledge/graph`);
+            if (res.ok) {
+              const data = await res.json();
+              this.knowledgeGraph = data.graph || { total_nodes: 0, total_edges: 0, nodes: [], edges: [] };
+              if (this.knowledgeGraph.nodes && this.knowledgeGraph.nodes.length > 0 && !this.selectedGraphNode) {
+                this.selectedGraphNode = this.knowledgeGraph.nodes[0].id;
+              }
+            }
+          } catch (e) {
+            console.error('Failed to load knowledge graph:', e);
+          }
+        },
+
+        getOutgoingEdges(nodeId) {
+          if (!this.knowledgeGraph || !this.knowledgeGraph.edges) return [];
+          return this.knowledgeGraph.edges.filter(e => e.source === nodeId);
+        },
+
+        getIncomingEdges(nodeId) {
+          if (!this.knowledgeGraph || !this.knowledgeGraph.edges) return [];
+          return this.knowledgeGraph.edges.filter(e => e.target === nodeId);
         },
 
         formatFileSize(bytes) {

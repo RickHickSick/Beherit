@@ -1066,6 +1066,24 @@ async def list_agent_knowledge(slug: str):
     return {"slug": slug, "files": files}
 
 
+@router.get("/{slug}/knowledge/graph")
+async def get_agent_knowledge_graph(slug: str):
+    """Retrieve Obsidian Wikilinks graph data (nodes & edges) for an agent's knowledge base (BEH-067)."""
+    agent = repo.load_agent(slug)
+    if not agent:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Agent not found.")
+    from beherit.core.rag import KnowledgeRAG
+
+    rag = KnowledgeRAG(db_manager=db_mgr)
+    agent_dir = Path(agent.file_path).parent if agent.file_path else (repo.base_dir / slug)
+    knowledge_dir = agent_dir / "knowledge"
+    if knowledge_dir.exists():
+        rag.sync_agent_knowledge(slug, knowledge_dir)
+
+    graph_data = rag.get_graph(slug)
+    return {"slug": slug, "graph": graph_data}
+
+
 @router.get("/{slug}/knowledge/{filename}")
 async def get_agent_knowledge_file(slug: str, filename: str):
     """Read a specific document or asset metadata from the agent's knowledge base."""
@@ -1325,11 +1343,14 @@ async def search_agent_knowledge(slug: str, payload: KnowledgeSearchRequest):
         rag.sync_agent_knowledge(slug, knowledge_dir)
 
     results = rag.search(slug, query=payload.query, top_k=payload.top_k)
+    matched_doc_names = list(dict.fromkeys(r["doc_name"] for r in results))
+    graph_expansion = rag.expand_graph(slug, matched_doc_names, max_hops=2)
     return {
         "slug": slug,
         "query": payload.query,
         "results_count": len(results),
         "results": results,
+        "graph_expansion": graph_expansion,
     }
 
 

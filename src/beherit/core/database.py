@@ -107,6 +107,19 @@ class DatabaseManager:
                 );
                 """
             )
+            conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS knowledge_links (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    agent_slug TEXT NOT NULL,
+                    source_doc TEXT NOT NULL,
+                    target_doc TEXT NOT NULL,
+                    link_text TEXT,
+                    created_at REAL NOT NULL,
+                    UNIQUE(agent_slug, source_doc, target_doc)
+                );
+                """
+            )
             conn.commit()
 
     def create_chat_session(
@@ -235,6 +248,7 @@ class DatabaseManager:
             conn.execute("DELETE FROM job_history WHERE agent_slug = ?", (agent_slug,))
             conn.execute("DELETE FROM knowledge_chunks WHERE agent_slug = ?", (agent_slug,))
             conn.execute("DELETE FROM knowledge_fts WHERE agent_slug = ?", (agent_slug,))
+            conn.execute("DELETE FROM knowledge_links WHERE agent_slug = ?", (agent_slug,))
             conn.commit()
 
     def record_job(
