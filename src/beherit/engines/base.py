@@ -79,6 +79,26 @@ class BaseAgentEngine(ABC):
         except Exception:
             pass
 
+        # Ingest dynamic agent skills (BEH-066)
+        try:
+            from beherit.core.skills import SkillManager
+            skill_mgr = SkillManager()
+            skills = skill_mgr.list_skills(agent)
+            if skills:
+                skill_items = [
+                    f"- **{s.name}** (`{s.filename}`, język: {s.skill_type}): {s.description}"
+                    for s in skills
+                ]
+                parts.append(
+                    "## Dostępne Umiejętności Skryptowe (katalog skills/)\n"
+                    "Posiadasz dedykowane skrypty umiejętności w swoim katalogu workspace. "
+                    "Możesz je wywoływać bezpośrednio za pomocą narzędzia `run_skill(skill_name='...', args={...})` "
+                    "lub dedykowanych funkcji `skill_<nazwa>(...)`:\n"
+                    + "\n".join(skill_items)
+                )
+        except Exception:
+            pass
+
         return "\n\n".join(parts)
 
     @abstractmethod

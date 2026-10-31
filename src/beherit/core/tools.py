@@ -432,6 +432,45 @@ class CapabilitiesGuard:
             }
         })
 
+        # Dynamic agent skills from skills/ directory (BEH-066)
+        raw_tools.append({
+            "name": "list_skills",
+            "description": "Zwraca listę wszystkich zarejestrowanych niestandardowych umiejętności i skryptów w katalogu skills/ agenta.",
+            "parameters": {
+                "type": "object",
+                "properties": {}
+            }
+        })
+        raw_tools.append({
+            "name": "run_skill",
+            "description": "Uruchamia skrypt umiejętności (Python/Bash) z katalogu skills/ agenta przekazując opcjonalne argumenty.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "skill_name": {"type": "string", "description": "Nazwa umiejętności (np. 'backup_db' lub 'analyze_metrics')"},
+                    "args": {"type": "object", "description": "Opcjonalne argumenty lub parametry wejściowe przekazywane do skryptu"}
+                },
+                "required": ["skill_name"]
+            }
+        })
+
+        try:
+            from beherit.core.skills import SkillManager
+            smgr = SkillManager(base_dir=self.default_workspace)
+            for skill in smgr.list_skills(agent):
+                raw_tools.append({
+                    "name": f"skill_{skill.name}",
+                    "description": f"Dedykowana umiejętność ({skill.skill_type}): {skill.description}",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "args": {"type": "object", "description": "Parametry wejściowe dla skryptu"}
+                        }
+                    }
+                })
+        except Exception:
+            pass
+
         if not raw_tools:
             return None
 
@@ -651,8 +690,39 @@ class CapabilitiesGuard:
             issue_id = args.get("issue_id") or args.get("id") or args.get("sequence_id")
             state = args.get("state", "done")
             return await client.update_issue_state(issue_id_or_seq=issue_id, state=state)
+        elif tool_name == "list_skills":
+            from beherit.core.skills import SkillManager
+            smgr = SkillManager(base_dir=self.default_workspace)
+            skills = smgr.list_skills(agent)
+            return {
+                "success": True,
+                "total": len(skills),
+                "skills": [
+                    {
+                        "name": s.name,
+                        "description": s.description,
+                        "type": s.skill_type,
+                        "file": s.filename,
+                    }
+                    for s in skills
+                ],
+            }
+        elif tool_name == "run_skill":
+            from beherit.core.skills import SkillManager
+            smgr = SkillManager(base_dir=self.default_workspace)
+            skill_name = args.get("skill_name", "")
+            skill_args = args.get("args")
+            timeout = args.get("timeout", 60)
+            return await smgr.execute_skill(agent, skill_name, args=skill_args, timeout=timeout)
+        elif tool_name.startswith("skill_"):
+            from beherit.core.skills import SkillManager
+            smgr = SkillManager(base_dir=self.default_workspace)
+            skill_name = tool_name.removeprefix("skill_")
+            skill_args = args.get("args") if "args" in args else (args if args else None)
+            timeout = args.get("timeout", 60)
+            return await smgr.execute_skill(agent, skill_name, args=skill_args, timeout=timeout)
         else:
             return {
                 "success": False,
-                "error": f"Unknown tool '{tool_name}'. Available: execute_bash, read_file, write_file, list_dir, call_agent, save_memory, recall_memory, forget_memory, manage_todo, plane_list_issues, plane_create_issue, plane_update_state",
+                "error": f"Unknown tool '{tool_name}'. Available: execute_bash, read_file, write_file, list_dir, call_agent, save_memory, recall_memory, forget_memory, manage_todo, plane_list_issues, plane_create_issue, plane_update_state, list_skills, run_skill",
             }

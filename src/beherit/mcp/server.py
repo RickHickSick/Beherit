@@ -201,6 +201,45 @@ class MCPServer:
             }
         })
 
+        # Dynamic agent skills from skills/ directory (BEH-066)
+        tools.append({
+            "name": "list_skills",
+            "description": "Zwraca listę wszystkich zarejestrowanych niestandardowych umiejętności i skryptów w katalogu skills/ agenta.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {}
+            }
+        })
+        tools.append({
+            "name": "run_skill",
+            "description": "Uruchamia skrypt umiejętności (Python/Bash) z katalogu skills/ agenta przekazując opcjonalne argumenty.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "skill_name": {"type": "string", "description": "Nazwa umiejętności (np. 'backup_db' lub 'analyze_metrics')"},
+                    "args": {"type": "object", "description": "Opcjonalne argumenty lub parametry wejściowe przekazywane do skryptu"}
+                },
+                "required": ["skill_name"]
+            }
+        })
+
+        try:
+            from beherit.core.skills import SkillManager
+            smgr = SkillManager()
+            for skill in smgr.list_skills(self.agent):
+                tools.append({
+                    "name": f"skill_{skill.name}",
+                    "description": f"Dedykowana umiejętność ({skill.skill_type}): {skill.description}",
+                    "inputSchema": {
+                        "type": "object",
+                        "properties": {
+                            "args": {"type": "object", "description": "Parametry wejściowe dla skryptu"}
+                        }
+                    }
+                })
+        except Exception:
+            pass
+
         return tools
 
     async def handle_request(self, message: dict[str, Any]) -> dict[str, Any] | None:

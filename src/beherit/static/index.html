@@ -291,6 +291,9 @@
                   <button @click="openKnowledgeModalFor(agent)" class="text-slate-400 hover:text-emerald-400 px-1 py-1 rounded transition flex items-center gap-1">
                     📚 Baza wiedzy
                   </button>
+                  <button @click="openSkillsModalFor(agent)" class="text-slate-400 hover:text-amber-400 px-1 py-1 rounded transition flex items-center gap-1" title="Dynamiczne skrypty i umiejętności">
+                    ⚡ Skills
+                  </button>
                   <button @click="openIntegrationModalFor(agent)" class="text-slate-400 hover:text-sky-400 px-1 py-1 rounded transition flex items-center gap-1" title="Integracja Webhook / n8n">
                     🔌 n8n / API
                   </button>
@@ -368,6 +371,15 @@
             </svg>
             <span class="hidden sm:inline">Plan</span>
             <span x-show="agentTodoSummary && agentTodoSummary.total > 0" class="text-[10px] bg-emerald-500/20 text-emerald-400 px-1.5 py-0.5 rounded-full font-mono font-semibold" x-text="`${agentTodoSummary.done}/${agentTodoSummary.total}`"></span>
+          </button>
+
+          <!-- Skills Button (BEH-066) -->
+          <button @click="openSkillsModal = true; loadAgentSkills()" title="Umiejętności i Skrypty (skills/)" class="flex items-center gap-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-amber-400 text-xs px-2.5 py-1.5 rounded-lg border border-slate-700 transition">
+            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
+            </svg>
+            <span class="hidden sm:inline">Skills</span>
+            <span x-show="agentSkills && agentSkills.length > 0" class="text-[10px] bg-amber-500/20 text-amber-400 px-1.5 py-0.5 rounded-full font-mono font-semibold" x-text="agentSkills.length"></span>
           </button>
 
           <!-- Agent Selector -->
@@ -2349,6 +2361,87 @@
     </div>
   </div>
 
+  <!-- MODAL: DYNAMIC AGENT SKILLS (BEH-066) -->
+  <div x-show="openSkillsModal" class="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4" style="display: none;">
+    <div @click.away="openSkillsModal = false" class="bg-slate-900 border border-slate-800 w-full max-w-2xl rounded-2xl p-6 shadow-2xl space-y-4 max-h-[90vh] flex flex-col">
+      <div class="flex items-center justify-between border-b border-slate-800 pb-3 shrink-0">
+        <div>
+          <h3 class="text-base font-bold text-slate-100 flex items-center gap-2">
+            <span>⚡</span> Dynamiczne Umiejętności (<span class="font-mono text-amber-400">skills/</span>)
+          </h3>
+          <p class="text-xs text-slate-400">Wykryte i załadowane skrypty Python (.py) oraz Bash (.sh) w katalogu workspace agenta.</p>
+        </div>
+        <button @click="openSkillsModal = false" class="text-slate-400 hover:text-slate-200">✕</button>
+      </div>
+
+      <!-- Skills List -->
+      <div class="flex-1 overflow-y-auto space-y-2 pr-1 custom-scroll min-h-[160px]">
+        <template x-if="agentSkills.length === 0">
+          <div class="p-6 text-center text-slate-500 text-xs border border-dashed border-slate-800 rounded-xl">
+            Brak skryptów w katalogu skills/. Utwórz pierwszy skrypt poniżej.
+          </div>
+        </template>
+        <template x-for="skill in agentSkills" :key="skill.name">
+          <div class="p-3 bg-slate-950/60 border border-slate-800/80 rounded-xl hover:border-slate-700 transition space-y-2">
+            <div class="flex items-center justify-between">
+              <div class="flex items-center gap-2">
+                <span class="text-xs font-mono font-bold text-amber-300" x-text="skill.name"></span>
+                <span class="text-[10px] uppercase font-mono px-2 py-0.5 rounded-full"
+                      :class="skill.skill_type === 'python' ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'bg-sky-500/10 text-sky-400 border border-sky-500/20'"
+                      x-text="skill.skill_type"></span>
+                <span class="text-[11px] text-slate-500 font-mono" x-text="skill.filename"></span>
+              </div>
+              <div class="flex items-center gap-2">
+                <button @click="runAgentSkill(skill.name)" :disabled="runningSkill === skill.name" class="bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 px-2.5 py-1 rounded text-xs transition flex items-center gap-1 font-medium border border-amber-500/30">
+                  <span x-show="runningSkill !== skill.name">▶ Uruchom</span>
+                  <span x-show="runningSkill === skill.name">⏳ ...</span>
+                </button>
+                <button @click="deleteAgentSkill(skill.name)" class="text-slate-500 hover:text-rose-400 p-1 text-xs transition" title="Usuń umiejętność">🗑️</button>
+              </div>
+            </div>
+            <div class="text-xs text-slate-400" x-text="skill.description"></div>
+          </div>
+        </template>
+      </div>
+
+      <!-- Skill Output Console -->
+      <div x-show="skillRunOutput" class="bg-slate-950 border border-slate-800 rounded-xl p-3 text-xs font-mono max-h-36 overflow-y-auto space-y-1">
+        <div class="flex items-center justify-between text-[11px] text-slate-400 border-b border-slate-800/60 pb-1">
+          <span>Wynik wykonania: <strong class="text-amber-400" x-text="skillRunOutput?.skill"></strong></span>
+          <button @click="skillRunOutput = null" class="hover:text-slate-200">✕</button>
+        </div>
+        <pre class="text-slate-300 whitespace-pre-wrap" x-text="skillRunOutput?.stdout || skillRunOutput?.error || 'Brak wyjścia'"></pre>
+      </div>
+
+      <!-- Add New Skill Form -->
+      <div class="pt-3 border-t border-slate-800 space-y-2 shrink-0">
+        <div class="flex items-center justify-between">
+          <span class="text-xs font-semibold text-slate-300">Dodaj nową umiejętność:</span>
+          <div class="flex items-center gap-3 text-xs">
+            <label class="flex items-center gap-1 text-slate-400 cursor-pointer">
+              <input type="radio" value="python" x-model="newSkillType" class="text-amber-500">
+              <span>Python (.py)</span>
+            </label>
+            <label class="flex items-center gap-1 text-slate-400 cursor-pointer">
+              <input type="radio" value="bash" x-model="newSkillType" class="text-amber-500">
+              <span>Bash (.sh)</span>
+            </label>
+          </div>
+        </div>
+        <div class="flex gap-2">
+          <input type="text" x-model="newSkillName" placeholder="Nazwa umiejętności (np. ping_server)" class="bg-slate-800 text-slate-200 px-3 py-1.5 rounded-lg border border-slate-700 text-xs outline-none focus:border-amber-400 w-1/3">
+          <input type="text" x-model="newSkillDescription" placeholder="Krótki opis / docstring" class="bg-slate-800 text-slate-200 px-3 py-1.5 rounded-lg border border-slate-700 text-xs outline-none focus:border-amber-400 flex-1">
+        </div>
+        <textarea x-model="newSkillContent" rows="3" placeholder="# Wpisz kod skryptu..." class="w-full bg-slate-950 font-mono text-xs text-slate-200 p-2.5 rounded-lg border border-slate-800 outline-none focus:border-amber-400"></textarea>
+        <div class="flex justify-end">
+          <button @click="saveNewSkill()" :disabled="!newSkillName.trim() || !newSkillContent.trim()" class="bg-amber-600 hover:bg-amber-500 disabled:opacity-50 text-white px-4 py-1.5 rounded-lg text-xs font-medium transition">
+            Zapisz umiejętność w skills/
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <!-- MODAL: SESSION TITLE / NEW SESSION (BEH-051) -->
   <div x-show="openSessionModal" class="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4" style="display: none;">
     <div @click.away="openSessionModal = false" class="bg-slate-900 border border-slate-800 w-full max-w-md rounded-2xl p-6 shadow-2xl space-y-4">
@@ -2498,6 +2591,16 @@
         newTodoText: '',
         goalInputText: '',
         isGoalRunning: false,
+
+        // Dynamic Skills (BEH-066)
+        openSkillsModal: false,
+        agentSkills: [],
+        newSkillName: '',
+        newSkillType: 'python',
+        newSkillDescription: '',
+        newSkillContent: '',
+        runningSkill: null,
+        skillRunOutput: null,
 
         // Engine model presets
         engineModelOptions: {
@@ -2744,6 +2847,7 @@
           this.currentView = 'chat';
           await this.loadAgentSessions(agent.slug);
           await this.loadAgentTodo();
+          await this.loadAgentSkills();
         },
 
         async loadAgentSessions(slug) {
@@ -3221,6 +3325,89 @@
           } finally {
             this.isGoalRunning = false;
             await this.loadAgentTodo();
+          }
+        },
+
+        // Dynamic Skills (BEH-066)
+        async openSkillsModalFor(agent) {
+          this.activeAgent = agent;
+          this.selectedAgentSlug = agent.slug;
+          this.openSkillsModal = true;
+          this.skillRunOutput = null;
+          await this.loadAgentSkills();
+        },
+
+        async loadAgentSkills() {
+          if (!this.activeAgent) return;
+          try {
+            const res = await this.apiFetch(`/api/agents/${this.activeAgent.slug}/skills`);
+            if (res.ok) {
+              const data = await res.json();
+              this.agentSkills = data.skills || [];
+            }
+          } catch (e) {
+            console.error('Failed to load agent skills:', e);
+          }
+        },
+
+        async saveNewSkill() {
+          if (!this.activeAgent || !this.newSkillName.trim() || !this.newSkillContent.trim()) return;
+          try {
+            const descHeader = this.newSkillDescription.trim() ? (this.newSkillType === 'python' ? `"""${this.newSkillDescription.trim()}"""\n` : `# Description: ${this.newSkillDescription.trim()}\n`) : '';
+            const finalContent = descHeader ? (descHeader + this.newSkillContent.trim()) : this.newSkillContent.trim();
+            const res = await this.apiFetch(`/api/agents/${this.activeAgent.slug}/skills`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                name: this.newSkillName.trim(),
+                skill_type: this.newSkillType,
+                content: finalContent
+              })
+            });
+            if (res.ok) {
+              this.newSkillName = '';
+              this.newSkillContent = '';
+              this.newSkillDescription = '';
+              await this.loadAgentSkills();
+            }
+          } catch (e) {
+            console.error('Failed to save skill:', e);
+          }
+        },
+
+        async runAgentSkill(skillName) {
+          if (!this.activeAgent) return;
+          this.runningSkill = skillName;
+          this.skillRunOutput = null;
+          try {
+            const res = await this.apiFetch(`/api/agents/${this.activeAgent.slug}/skills/${skillName}/run`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({})
+            });
+            if (res.ok) {
+              const data = await res.json();
+              this.skillRunOutput = data.result || data;
+            }
+          } catch (e) {
+            this.skillRunOutput = { error: String(e) };
+          } finally {
+            this.runningSkill = null;
+          }
+        },
+
+        async deleteAgentSkill(skillName) {
+          if (!this.activeAgent) return;
+          if (!confirm(`Czy na pewno chcesz usunąć umiejętność '${skillName}'?`)) return;
+          try {
+            const res = await this.apiFetch(`/api/agents/${this.activeAgent.slug}/skills/${skillName}`, {
+              method: 'DELETE'
+            });
+            if (res.ok) {
+              await this.loadAgentSkills();
+            }
+          } catch (e) {
+            console.error('Failed to delete skill:', e);
           }
         },
 

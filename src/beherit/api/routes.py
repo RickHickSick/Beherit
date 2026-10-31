@@ -271,6 +271,17 @@ class ExecuteToolRequest(BaseModel):
     args: dict[str, Any] = Field(default_factory=dict)
 
 
+class CreateSkillRequest(BaseModel):
+    name: str = Field(..., min_length=1, max_length=100, pattern=r"^[a-zA-Z0-9_\-]+$")
+    content: str = Field(..., description="Script source code (Python or Bash)")
+    skill_type: str = Field("python", description="Type: 'python' or 'bash'")
+
+
+class RunSkillRequest(BaseModel):
+    args: Any = Field(default=None, description="Optional arguments passed to the skill")
+    timeout: int = Field(60, ge=1, le=300, description="Execution timeout in seconds")
+
+
 # --- Agent CRUD Endpoints ---
 
 
@@ -761,6 +772,96 @@ async def run_agent_goal(slug: str, payload: RunGoalRequest):
             }
 
     return EventSourceResponse(goal_event_generator())
+
+
+@router.get("/{slug}/skills")
+async def list_agent_skills(slug: str):
+    """Retrieve all dynamic skills discovered in agent's skills/ directory (BEH-066)."""
+    agent = repo.load_agent(slug)
+    if not agent:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Agent not found.")
+    from beherit.core.skills import SkillManager
+    smgr = SkillManager(base_dir=repo.base_dir)
+    skills = smgr.list_skills(agent)
+    skills_dir = smgr.get_skills_dir(agent)
+    return {
+        "slug": slug,
+        "skills_dir": str(skills_dir),
+        "total": len(skills),
+        "skills": [
+            {
+                "name": s.name,
+                "description": s.description,
+                "skill_type": s.skill_type,
+                "file_path": str(s.file_path),
+                "filename": s.filename,
+            }
+            for s in skills
+        ],
+    }
+
+
+@router.post("/{slug}/skills", status_code=status.HTTP_201_CREATED)
+async def create_or_update_agent_skill(slug: str, payload: CreateSkillRequest):
+    """Create or overwrite a custom Python or Bash skill script in agent's skills/ folder (BEH-066)."""
+    agent = repo.load_agent(slug)
+    if not agent:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Agent not found.")
+    from beherit.core.skills import SkillManager
+    smgr = SkillManager(base_dir=repo.base_dir)
+    skills_dir = smgr.get_skills_dir(agent)
+    ext = ".py" if payload.skill_type.lower() == "python" else ".sh"
+    safe_name = payload.name.strip().replace("-", "_").lower()
+    target_file = skills_dir / f"{safe_name}{ext}"
+    target_file.write_text(payload.content, encoding="utf-8")
+    if ext == ".sh":
+        try:
+            target_file.chmod(0o755)
+        except Exception:
+            pass
+
+    skills = smgr.list_skills(agent)
+    created = next((s for s in skills if s.name == safe_name), None)
+    return {
+        "status": "created",
+        "slug": slug,
+        "skill": {
+            "name": safe_name,
+            "filename": target_file.name,
+            "skill_type": payload.skill_type.lower(),
+            "description": created.description if created else "",
+        },
+    }
+
+
+@router.post("/{slug}/skills/{skill_name}/run")
+async def run_agent_skill(slug: str, skill_name: str, payload: RunSkillRequest | None = None):
+    """Execute a dynamic skill directly via REST API (BEH-066)."""
+    agent = repo.load_agent(slug)
+    if not agent:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Agent not found.")
+    from beherit.core.skills import SkillManager
+    smgr = SkillManager(base_dir=repo.base_dir)
+    args = payload.args if payload else None
+    timeout = payload.timeout if payload else 60
+    result = await smgr.execute_skill(agent, skill_name, args=args, timeout=timeout)
+    return {"status": "success" if result.get("success") else "failed", "result": result}
+
+
+@router.delete("/{slug}/skills/{skill_name}")
+async def delete_agent_skill(slug: str, skill_name: str):
+    """Delete a custom skill from agent's skills/ directory (BEH-066)."""
+    agent = repo.load_agent(slug)
+    if not agent:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Agent not found.")
+    from beherit.core.skills import SkillManager
+    smgr = SkillManager(base_dir=repo.base_dir)
+    skills = smgr.list_skills(agent)
+    target = next((s for s in skills if s.name == skill_name.lower().replace("-", "_")), None)
+    if not target or not target.file_path.exists():
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Skill '{skill_name}' not found.")
+    target.file_path.unlink()
+    return {"status": "deleted", "skill": skill_name}
 
 
 @router.get("/{slug}/history")
