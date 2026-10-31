@@ -2327,6 +2327,27 @@
           <pre class="bg-slate-900 p-3 rounded-lg border border-slate-800 font-mono text-[11px] text-amber-300 overflow-x-auto custom-scroll" x-text="getCurlCommand()"></pre>
         </div>
 
+        <!-- Telegram Bot Integration (BEH-068) -->
+        <div class="p-4 bg-slate-950/80 rounded-xl border border-sky-950 space-y-3">
+          <div class="flex items-center justify-between">
+            <h4 class="text-xs font-bold text-sky-400 flex items-center gap-1.5">
+              <span>✈️</span> Dwukierunkowy Bot Telegram (BEH-068)
+            </h4>
+            <span class="text-[10px] font-mono px-2 py-0.5 rounded-full"
+                  :class="telegramBotStatus.configured ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'bg-slate-800 text-slate-500 border border-slate-700'"
+                  x-text="telegramBotStatus.configured ? 'Aktywny / Skonfigurowany' : 'Brak Tokena w .env'"></span>
+          </div>
+          <p class="text-xs text-slate-400">
+            Rozmawiaj z agentem bezpośrednio z aplikacji Telegram na smartfonie. Bot obsługuje komendy: <code class="text-sky-300">/agents</code>, <code class="text-sky-300">/agent &lt;slug&gt;</code>, <code class="text-sky-300">/status</code>, <code class="text-sky-300">/todo</code>, <code class="text-sky-300">/clear</code>.
+          </p>
+          <div class="flex gap-2">
+            <input type="text" x-model="telegramTestMessage" placeholder="Wpisz treść wiadomości testowej do wysłania..." class="flex-1 bg-slate-800 text-slate-100 px-3 py-1.5 rounded-lg border border-slate-700 outline-none text-xs focus:border-sky-400">
+            <button @click="sendTelegramTestNotification()" :disabled="!telegramTestMessage.trim()" class="bg-sky-600 hover:bg-sky-500 disabled:opacity-50 text-white font-medium px-3 py-1.5 rounded-lg text-xs transition">
+              Wyślij test
+            </button>
+          </div>
+        </div>
+
         <!-- Interactive Webhook Test Box -->
         <div class="p-4 bg-slate-950/80 rounded-xl border border-emerald-950 space-y-3">
           <h4 class="text-xs font-bold text-emerald-400 flex items-center gap-1.5">
@@ -2752,6 +2773,8 @@
         testWebhookPrompt: 'Przeanalizuj bieżący status i wygeneruj 3 kluczowe wnioski.',
         isTestingWebhook: false,
         testWebhookResult: '',
+        telegramBotStatus: { configured: false },
+        telegramTestMessage: '',
 
         // Prompt Run Modal (BEH-046)
         openPromptRunModal: false,
@@ -4267,10 +4290,42 @@
           }
         },
 
-        openIntegrationModalFor(agent) {
+        async openIntegrationModalFor(agent) {
           this.integrationTargetAgent = agent;
           this.testWebhookResult = '';
           this.openIntegrationModal = true;
+          await this.loadTelegramStatus();
+        },
+
+        async loadTelegramStatus() {
+          try {
+            const res = await this.apiFetch('/api/telegram/status');
+            if (res.ok) {
+              this.telegramBotStatus = await res.json();
+            }
+          } catch (e) {
+            console.error('Failed to load telegram status:', e);
+          }
+        },
+
+        async sendTelegramTestNotification() {
+          if (!this.telegramTestMessage.trim()) return;
+          try {
+            const res = await this.apiFetch('/api/telegram/send', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ message: this.telegramTestMessage.trim() })
+            });
+            if (res.ok) {
+              this.showToast('Wysłano powiadomienie do Telegram!');
+              this.telegramTestMessage = '';
+            } else {
+              const err = await res.json();
+              alert(`Błąd Telegram: ${err.detail || 'Błąd wysyłania'}`);
+            }
+          } catch (e) {
+            alert(`Błąd sieci: ${e.message}`);
+          }
         },
 
         getWebhookUrl() {

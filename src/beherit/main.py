@@ -1,5 +1,6 @@
 """FastAPI Application Entrypoint for Beherit Server."""
 
+import asyncio
 import hmac
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -17,6 +18,7 @@ from beherit.api.routes import (
     plane_router,
     reports_router,
     scheduler,
+    telegram_router,
 )
 from beherit.api.routes import (
     router as agents_router,
@@ -26,9 +28,16 @@ from beherit.config import settings
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Lifecycle manager to cleanly start and stop background scheduler."""
+    """Lifecycle manager to cleanly start and stop background scheduler and Telegram bot."""
     scheduler.start()
+    telegram_task = None
+    if settings.TELEGRAM_BOT_TOKEN:
+        from beherit.core.telegram_bot import telegram_bot_service
+        telegram_task = asyncio.create_task(telegram_bot_service.start_polling())
     yield
+    if telegram_task:
+        from beherit.core.telegram_bot import telegram_bot_service
+        await telegram_bot_service.stop()
     scheduler.shutdown()
 
 
@@ -92,6 +101,7 @@ app.include_router(knowledge_router)
 app.include_router(history_router)
 app.include_router(reports_router)
 app.include_router(plane_router)
+app.include_router(telegram_router)
 app.include_router(auth_guard_router)
 
 # Static files directory

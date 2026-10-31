@@ -35,6 +35,7 @@ history_router = APIRouter(prefix="/api/history", tags=["history"])
 reports_router = APIRouter(prefix="/api/reports", tags=["reports"])
 auth_guard_router = APIRouter(prefix="/api/auth", tags=["auth_guard"])
 plane_router = APIRouter(prefix="/api/plane", tags=["plane"])
+telegram_router = APIRouter(prefix="/api/telegram", tags=["telegram"])
 
 repo = AgentRepository()
 auth_mgr = AgentAuthManager()
@@ -280,6 +281,11 @@ class CreateSkillRequest(BaseModel):
 class RunSkillRequest(BaseModel):
     args: Any = Field(default=None, description="Optional arguments passed to the skill")
     timeout: int = Field(60, ge=1, le=300, description="Execution timeout in seconds")
+
+
+class TelegramSendRequest(BaseModel):
+    message: str = Field(..., min_length=1, description="Message text to send to Telegram")
+    chat_id: str | int | None = Field(None, description="Optional target Telegram chat ID")
 
 
 # --- Agent CRUD Endpoints ---
@@ -1688,4 +1694,50 @@ async def get_plane_states():
 
     client = PlaneClient()
     return await client.get_states_map()
+
+
+# --- Telegram Bot Endpoints (BEH-068) ---
+
+
+@telegram_router.get("/status")
+async def get_telegram_status():
+    """Retrieve Telegram Bot integration status and metadata (BEH-068)."""
+    from beherit.core.telegram_bot import telegram_bot_service
+
+    bot_info = await telegram_bot_service.get_me() if telegram_bot_service.is_configured else None
+    return {
+        "configured": telegram_bot_service.is_configured,
+        "bot_info": bot_info,
+        "default_chat_id": telegram_bot_service.default_chat_id,
+        "allowed_user_ids": list(telegram_bot_service.allowed_user_ids),
+        "active_users_count": len(telegram_bot_service._user_active_agents),
+    }
+
+
+@telegram_router.post("/send")
+async def send_telegram_message(payload: TelegramSendRequest):
+    """Send a notification or broadcast message via Telegram Bot (BEH-068)."""
+    from beherit.core.telegram_bot import telegram_bot_service
+
+    if not telegram_bot_service.is_configured:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Telegram bot is not configured. Set TELEGRAM_BOT_TOKEN in settings or .env.",
+        )
+
+    target_chat = payload.chat_id or telegram_bot_service.default_chat_id
+    if not target_chat:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="No target chat_id provided and no default TELEGRAM_CHAT_ID configured.",
+        )
+
+    sent = await telegram_bot_service.send_message(target_chat, payload.message)
+    if not sent:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to deliver message to Telegram. Check bot token and chat_id.",
+        )
+
+    return {"status": "sent", "chat_id": target_chat, "message": payload.message}
 

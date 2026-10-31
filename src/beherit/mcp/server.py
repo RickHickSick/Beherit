@@ -253,6 +253,20 @@ class MCPServer:
             }
         })
 
+        # Telegram Notification tool (BEH-068)
+        tools.append({
+            "name": "send_telegram_notification",
+            "description": "Wysyła bezpośrednie powiadomienie lub alert na czat Telegram administratora/użytkownika.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "message": {"type": "string", "description": "Treść powiadomienia lub raportu do wysłania na Telegram"},
+                    "chat_id": {"type": "string", "description": "Opcjonalny docelowy chat_id"}
+                },
+                "required": ["message"]
+            }
+        })
+
         return tools
 
     async def handle_request(self, message: dict[str, Any]) -> dict[str, Any] | None:

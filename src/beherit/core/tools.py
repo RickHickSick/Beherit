@@ -484,6 +484,20 @@ class CapabilitiesGuard:
             }
         })
 
+        # Telegram Notification tool (BEH-068)
+        raw_tools.append({
+            "name": "send_telegram_notification",
+            "description": "Wysyła bezpośrednie powiadomienie lub alert na czat Telegram administratora/użytkownika.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "message": {"type": "string", "description": "Treść powiadomienia lub raportu do wysłania na Telegram"},
+                    "chat_id": {"type": "string", "description": "Opcjonalny docelowy chat_id"}
+                },
+                "required": ["message"]
+            }
+        })
+
         if not raw_tools:
             return None
 
@@ -754,8 +768,19 @@ class CapabilitiesGuard:
                     "success": True,
                     "graph": graph,
                 }
+        elif tool_name == "send_telegram_notification":
+            from beherit.core.telegram_bot import telegram_bot_service
+            msg_text = args.get("message", "")
+            target_chat = args.get("chat_id")
+            sent = await telegram_bot_service.send_notification(msg_text, chat_id=target_chat)
+            return {
+                "success": sent,
+                "message": msg_text,
+                "delivered": sent,
+                "configured": telegram_bot_service.is_configured,
+            }
         else:
             return {
                 "success": False,
-                "error": f"Unknown tool '{tool_name}'. Available: execute_bash, read_file, write_file, list_dir, call_agent, save_memory, recall_memory, forget_memory, manage_todo, plane_list_issues, plane_create_issue, plane_update_state, list_skills, run_skill, query_knowledge_graph",
+                "error": f"Unknown tool '{tool_name}'. Available: execute_bash, read_file, write_file, list_dir, call_agent, save_memory, recall_memory, forget_memory, manage_todo, plane_list_issues, plane_create_issue, plane_update_state, list_skills, run_skill, query_knowledge_graph, send_telegram_notification",
             }

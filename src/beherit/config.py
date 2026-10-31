@@ -66,14 +66,18 @@ class Settings(BaseSettings):
         description="Optional database URL for external database tools",
     )
 
-    # Optional Telegram Reporting Alerts
+    # Optional Telegram Reporting Alerts & Bot (BEH-068)
     TELEGRAM_BOT_TOKEN: str | None = Field(
         default=None,
-        description="Optional Telegram bot token for job alerts",
+        description="Optional Telegram bot token for interactive bot and job alerts",
     )
     TELEGRAM_CHAT_ID: str | None = Field(
         default=None,
-        description="Optional Telegram chat ID for job alerts",
+        description="Optional Telegram chat ID for job alerts and owner recognition",
+    )
+    TELEGRAM_ALLOWED_USER_IDS: str | None = Field(
+        default=None,
+        description="Optional comma-separated Telegram user IDs allowed to interact with the bot",
     )
 
     # Plane Project Management Integration (BEH-065)
