@@ -99,6 +99,7 @@ class BaseAgentEngine(ABC):
         agent: AgentModel,
         message: str,
         history: list | None = None,
+        attachments: list[dict[str, Any]] | None = None,
     ) -> AsyncIterator[dict[str, Any]]:
         """
         Execute an agent turn with the SDK and yield streaming events

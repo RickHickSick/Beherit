@@ -1,6 +1,7 @@
 """Claude Code SDK Engine Adapter with Per-Agent Session Isolation."""
 
 import asyncio
+import base64
 import json
 import shutil
 from collections.abc import AsyncIterator
@@ -76,8 +77,9 @@ class ClaudeCodeEngine(BaseAgentEngine):
         agent: AgentModel,
         message: str,
         history: list[dict[str, str]] | None = None,
+        attachments: list[dict[str, Any]] | None = None,
     ) -> AsyncIterator[dict[str, Any]]:
-        """Stream chat execution via Claude Code CLI or isolated runner."""
+        """Stream chat execution via Claude Code CLI or isolated runner with attachments support (BEH-064)."""
         if not self.auth_manager.is_authenticated(agent.slug):
             yield {
                 "event": "error",
@@ -105,6 +107,15 @@ class ClaudeCodeEngine(BaseAgentEngine):
                 for h in history
             ]
             prompt_parts.append("[CONVERSATION HISTORY]\n" + "\n".join(history_lines))
+
+        if attachments:
+            att_lines = []
+            for att in attachments:
+                fname = att.get("filename", "plik")
+                fpath = att.get("path", "")
+                ctype = att.get("content_type", "")
+                att_lines.append(f"- Załącznik: `{fname}` ({ctype}), ścieżka: `{fpath}`")
+            prompt_parts.append("[ZAŁĄCZONE PLIKI I OBRAZY UŻYTKOWNIKA]\n" + "\n".join(att_lines))
 
         prompt_parts.append(f"[USER]\n{message}")
         full_prompt = "\n\n".join(prompt_parts)
@@ -163,7 +174,7 @@ class ClaudeCodeEngine(BaseAgentEngine):
         else:
             token = self.auth_manager.get_token(agent.slug) or env.get("ANTHROPIC_API_KEY", "")
             if token and (token.startswith("sk-ant-api") or token.startswith("sk-ant-oat")):
-                async for chunk in self._stream_anthropic_api(agent, message, history, token, full_system_context):
+                async for chunk in self._stream_anthropic_api(agent, message, history, token, full_system_context, attachments=attachments):
                     yield chunk
             else:
                 yield {"event": "thought", "data": f"Executing turn in Claude Code runtime ({agent.model})..."}
@@ -181,8 +192,9 @@ class ClaudeCodeEngine(BaseAgentEngine):
         history: list[dict[str, str]] | None,
         token: str,
         system_context: str | None,
+        attachments: list[dict[str, Any]] | None = None,
     ) -> AsyncIterator[dict[str, Any]]:
-        """Direct HTTP streaming from Anthropic Messages API with ReAct Function Calling (BEH-061)."""
+        """Direct HTTP streaming from Anthropic Messages API with ReAct Function Calling (BEH-061) and Multimodal Vision (BEH-064)."""
         from beherit.core.tools import CapabilitiesGuard
 
         guard = CapabilitiesGuard(default_workspace=self.auth_manager.base_dir)
@@ -211,7 +223,38 @@ class ClaudeCodeEngine(BaseAgentEngine):
                 content = h.get("content", "")
                 if content:
                     messages.append({"role": role, "content": content})
-        messages.append({"role": "user", "content": message})
+
+        user_content: list[dict[str, Any]] = []
+        if attachments:
+            for att in attachments:
+                ctype = att.get("content_type", "")
+                fname = att.get("filename", "plik")
+                b64 = att.get("base64_data")
+                if not b64 and att.get("path"):
+                    p = Path(att["path"])
+                    if p.exists():
+                        try:
+                            b64 = base64.b64encode(p.read_bytes()).decode("ascii")
+                        except Exception:
+                            pass
+                if b64 and ctype.startswith("image/"):
+                    user_content.append({
+                        "type": "image",
+                        "source": {
+                            "type": "base64",
+                            "media_type": ctype,
+                            "data": b64
+                        }
+                    })
+                elif att.get("path") and Path(att["path"]).exists():
+                    try:
+                        text_val = Path(att["path"]).read_text(encoding="utf-8", errors="replace")
+                        user_content.append({"type": "text", "text": f"### Załączony plik {fname}:\n{text_val}"})
+                    except Exception:
+                        pass
+
+        user_content.append({"type": "text", "text": message})
+        messages.append({"role": "user", "content": user_content})
 
         yield {"event": "thought", "data": f"Nawiązywanie bezpośredniego połączenia z Anthropic API ({model})..."}
 

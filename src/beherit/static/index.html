@@ -426,6 +426,28 @@
                 </div>
               </template>
 
+              <!-- Staged attachments preview in message bubble (BEH-064) -->
+              <template x-if="msg.attachments && msg.attachments.length > 0">
+                <div class="mb-3 flex flex-wrap gap-2">
+                  <template x-for="(att, aIdx) in msg.attachments" :key="aIdx">
+                    <div>
+                      <template x-if="att.is_image">
+                        <a :href="att.url" target="_blank" class="block group relative overflow-hidden rounded-lg border border-slate-700/80 bg-slate-950/60 max-w-xs hover:border-emerald-500 transition">
+                          <img :src="att.url" :alt="att.filename" class="max-h-48 rounded object-cover">
+                          <div class="absolute bottom-0 inset-x-0 bg-slate-950/80 px-2 py-0.5 text-[10px] text-slate-300 truncate" x-text="att.filename"></div>
+                        </a>
+                      </template>
+                      <template x-if="!att.is_image">
+                        <a :href="att.url" target="_blank" class="flex items-center gap-1.5 bg-slate-800/80 hover:bg-slate-750 border border-slate-700 px-2.5 py-1.5 rounded-lg text-xs text-slate-200 transition">
+                          <span>📄</span>
+                          <span class="max-w-[150px] truncate" x-text="att.filename"></span>
+                        </a>
+                      </template>
+                    </div>
+                  </template>
+                </div>
+              </template>
+
               <!-- Main message text -->
               <div class="text-sm leading-relaxed prose prose-invert max-w-none break-words" 
                    x-html="renderMarkdown(msg.content)"></div>
@@ -451,17 +473,46 @@
         <button @click="quickPrompt('Wypisz pliki w twoim katalogu roboczym.')" class="bg-slate-800 hover:bg-slate-700 px-2.5 py-1 rounded-md shrink-0 border border-slate-700/50 transition">Lista Plików</button>
       </div>
 
+      <!-- Staged Upload Attachments Strip (BEH-064) -->
+      <div x-show="chatAttachments && chatAttachments.length > 0" class="px-4 py-2 bg-slate-900 border-t border-slate-800 flex items-center gap-2 overflow-x-auto custom-scroll shrink-0">
+        <template x-for="(att, attIdx) in chatAttachments" :key="attIdx">
+          <div class="flex items-center gap-2 bg-slate-800 px-2.5 py-1 rounded-lg border border-slate-700 text-xs text-slate-200 shrink-0">
+            <template x-if="att.is_image">
+              <img :src="att.url" class="w-6 h-6 rounded object-cover">
+            </template>
+            <template x-if="!att.is_image">
+              <span>📄</span>
+            </template>
+            <span class="max-w-[120px] truncate" x-text="att.filename"></span>
+            <button @click="removeAttachment(attIdx)" class="text-slate-400 hover:text-rose-400 ml-1">✕</button>
+          </div>
+        </template>
+      </div>
+
       <!-- Chat Input Area (with iOS Safe Area Padding) -->
       <div class="p-3 bg-slate-950/80 border-t border-slate-800 flex items-center gap-2 shrink-0 safe-pb">
+        <!-- Hidden File Input for iOS & Desktop -->
+        <input type="file" x-ref="chatFileInput" @change="uploadAttachmentFile($event)" accept="image/*,.pdf,.txt,.md,.json,.csv" class="hidden">
+        
+        <!-- Attachment Button (Multimodal Vision) -->
+        <button type="button" 
+                @click="$refs.chatFileInput.click()" 
+                title="Załącz plik lub zdjęcie (Multimodal Vision)"
+                class="p-2.5 text-slate-400 hover:text-emerald-400 hover:bg-slate-800 rounded-xl border border-slate-850 hover:border-slate-700 transition shrink-0">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
+          </svg>
+        </button>
+
         <textarea x-model="chatInput" 
                   @keydown.enter.prevent="if(!$event.shiftKey) sendChatMessage()"
-                  placeholder="Napisz do agenta..." 
+                  placeholder="Napisz do agenta lub załącz zrzut ekranu..." 
                   rows="1" 
                   class="flex-1 bg-slate-900 text-slate-100 placeholder-slate-500 text-sm px-4 py-3 rounded-xl border border-slate-800 focus:border-emerald-500 outline-none resize-none transition"></textarea>
         
         <button x-show="!isStreaming" 
                 @click="sendChatMessage()" 
-                :disabled="!chatInput.trim()"
+                :disabled="!chatInput.trim() && chatAttachments.length === 0"
                 title="Wyślij wiadomość"
                 class="bg-emerald-600 hover:bg-emerald-500 disabled:opacity-40 text-slate-950 font-bold p-3 rounded-xl transition shrink-0 shadow-md shadow-emerald-600/20">
           <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"></path></svg>
@@ -2433,6 +2484,7 @@
         agentSessions: [],
         chatMessages: [],
         chatInput: '',
+        chatAttachments: [],
         isStreaming: false,
         openSessionModal: false,
         sessionModalMode: 'edit',
@@ -2853,12 +2905,51 @@
           this.sendChatMessage();
         },
 
+        async uploadAttachmentFile(event) {
+          if (!this.activeAgent) return;
+          const file = event.target.files && event.target.files[0];
+          if (!file) return;
+
+          const formData = new FormData();
+          formData.append('file', file);
+
+          try {
+            this.showToast(`Wysyłanie ${file.name}...`);
+            const res = await this.apiFetch(`/api/agents/${this.activeAgent.slug}/chat/upload`, {
+              method: 'POST',
+              body: formData
+            });
+            if (res.ok) {
+              const data = await res.json();
+              this.chatAttachments.push(data);
+              this.showToast(`Załączono: ${data.filename}`);
+            } else {
+              this.showToast('Błąd przesyłania załącznika');
+            }
+          } catch (e) {
+            console.error('Upload failed:', e);
+            this.showToast('Błąd sieci podczas wysyłania pliku');
+          } finally {
+            event.target.value = '';
+          }
+        },
+
+        removeAttachment(index) {
+          this.chatAttachments.splice(index, 1);
+        },
+
         async sendChatMessage() {
-          if (!this.chatInput.trim() || !this.activeAgent || this.isStreaming) return;
+          if ((!this.chatInput.trim() && this.chatAttachments.length === 0) || !this.activeAgent || this.isStreaming) return;
           this.haptic();
           const userMsg = this.chatInput.trim();
+          const attachmentsToSend = [...this.chatAttachments];
           this.chatInput = '';
-          this.chatMessages.push({ role: 'user', content: userMsg });
+          this.chatAttachments = [];
+          this.chatMessages.push({
+            role: 'user',
+            content: userMsg || (attachmentsToSend.length > 0 ? "Przeanalizuj załączony plik." : ""),
+            attachments: attachmentsToSend
+          });
 
           const assistantMsgIdx = this.chatMessages.push({
             role: 'assistant',
@@ -2872,8 +2963,9 @@
 
           try {
             const payload = {
-              message: userMsg,
-              session_id: this.activeSessionId || null
+              message: userMsg || (attachmentsToSend.length > 0 ? "Przeanalizuj załączony plik." : ""),
+              session_id: this.activeSessionId || null,
+              attachments: attachmentsToSend
             };
 
             const response = await this.apiFetch(`/api/agents/${this.activeAgent.slug}/chat`, {

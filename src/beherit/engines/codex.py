@@ -76,6 +76,7 @@ class OpenAICodexEngine(BaseAgentEngine):
         agent: AgentModel,
         message: str,
         history: list[dict[str, str]] | None = None,
+        attachments: list[dict[str, Any]] | None = None,
     ) -> AsyncIterator[dict[str, Any]]:
         """Stream chat execution via Codex CLI or isolated runner."""
         if not self.auth_manager.is_authenticated(agent.slug):

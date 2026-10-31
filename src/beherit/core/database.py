@@ -70,11 +70,20 @@ class DatabaseManager:
                     role TEXT NOT NULL,
                     content TEXT NOT NULL,
                     thoughts TEXT,
+                    attachments TEXT DEFAULT '[]',
                     created_at REAL NOT NULL,
                     FOREIGN KEY (session_id) REFERENCES chat_sessions(id) ON DELETE CASCADE
                 );
                 """
             )
+            # Ensure attachments column exists if table was created in an earlier migration (BEH-064)
+            cursor = conn.execute("PRAGMA table_info(chat_messages);")
+            columns = [row["name"] for row in cursor.fetchall()]
+            if "attachments" not in columns:
+                try:
+                    conn.execute("ALTER TABLE chat_messages ADD COLUMN attachments TEXT DEFAULT '[]';")
+                except Exception:
+                    pass
             conn.execute(
                 """
                 CREATE TABLE IF NOT EXISTS knowledge_chunks (
@@ -142,7 +151,7 @@ class DatabaseManager:
         with self._get_connection() as conn:
             cursor = conn.execute(
                 """
-                SELECT id, session_id, agent_slug, role, content, thoughts, created_at
+                SELECT id, session_id, agent_slug, role, content, thoughts, attachments, created_at
                 FROM chat_messages
                 WHERE session_id = ?
                 ORDER BY id ASC
@@ -160,6 +169,14 @@ class DatabaseManager:
                         m["thoughts"] = [m["thoughts"]]
                 else:
                     m["thoughts"] = []
+
+                if m.get("attachments"):
+                    try:
+                        m["attachments"] = json.loads(m["attachments"])
+                    except Exception:
+                        m["attachments"] = []
+                else:
+                    m["attachments"] = []
                 messages.append(m)
             return messages
 
@@ -170,10 +187,12 @@ class DatabaseManager:
         role: str,
         content: str,
         thoughts: list[str] | None = None,
+        attachments: list[dict[str, Any]] | None = None,
     ) -> int:
         """Add a single message to a chat session and touch session updated_at."""
         now = time.time()
         thoughts_json = json.dumps(thoughts) if thoughts else None
+        attachments_json = json.dumps(attachments) if attachments else "[]"
         with self._get_connection() as conn:
             conn.execute(
                 "UPDATE chat_sessions SET updated_at = ? WHERE id = ?",
@@ -181,10 +200,10 @@ class DatabaseManager:
             )
             cursor = conn.execute(
                 """
-                INSERT INTO chat_messages (session_id, agent_slug, role, content, thoughts, created_at)
-                VALUES (?, ?, ?, ?, ?, ?)
+                INSERT INTO chat_messages (session_id, agent_slug, role, content, thoughts, attachments, created_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
                 """,
-                (session_id, agent_slug, role, content, thoughts_json, now),
+                (session_id, agent_slug, role, content, thoughts_json, attachments_json, now),
             )
             conn.commit()
             return cursor.lastrowid

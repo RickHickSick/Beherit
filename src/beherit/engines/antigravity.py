@@ -1,6 +1,7 @@
 """Google Antigravity SDK Engine Adapter with Per-Agent Session Isolation."""
 
 import asyncio
+import base64
 import json
 import shutil
 from collections.abc import AsyncIterator
@@ -76,10 +77,12 @@ class AntigravityEngine(BaseAgentEngine):
         agent: AgentModel,
         message: str,
         history: list[dict[str, str]] | None = None,
+        attachments: list[dict[str, Any]] | None = None,
     ) -> AsyncIterator[dict[str, Any]]:
         """
         Execute an agent turn in an isolated subprocess with the agent's credentials.
         Yields structured SSE event dictionaries (thought, token, tool_call, done).
+        Supports multimodal attachments (BEH-064).
         """
         # Verify credentials before launching
         if not self.auth_manager.is_authenticated(agent.slug):
@@ -116,6 +119,15 @@ class AntigravityEngine(BaseAgentEngine):
                 role_label = "User" if h.get("role") == "user" else agent.name
                 history_lines.append(f"{role_label}: {h.get('content', '')}")
             prompt_parts.append("[CONVERSATION HISTORY]\n" + "\n".join(history_lines) + "\n[END CONVERSATION HISTORY]")
+
+        if attachments:
+            att_lines = []
+            for att in attachments:
+                fname = att.get("filename", "plik")
+                fpath = att.get("path", "")
+                ctype = att.get("content_type", "")
+                att_lines.append(f"- Plik: `{fname}` ({ctype}), ścieżka lokalna: `{fpath}`")
+            prompt_parts.append("[ZAŁĄCZONE PLIKI I OBRAZY UŻYTKOWNIKA]\n" + "\n".join(att_lines) + "\n[KONIEC ZAŁĄCZONYCH PLIKÓW]")
 
         prompt_parts.append(f"[CURRENT USER REQUEST]\n{message}")
         full_turn_prompt = "\n\n".join(prompt_parts)
@@ -216,7 +228,7 @@ class AntigravityEngine(BaseAgentEngine):
         else:
             token = self.auth_manager.get_token(agent.slug) or env.get("GEMINI_API_KEY", "")
             if token and (token.startswith("AIzaSy") or token.startswith("gemini_")):
-                async for chunk in self._stream_gemini_api(agent, message, history, token, full_system_context):
+                async for chunk in self._stream_gemini_api(agent, message, history, token, full_system_context, attachments=attachments):
                     yield chunk
             else:
                 yield {"event": "thought", "data": f"Processing turn for {agent.name} with prompt context..."}
@@ -235,8 +247,9 @@ class AntigravityEngine(BaseAgentEngine):
         history: list[dict[str, str]] | None,
         token: str,
         system_context: str | None,
+        attachments: list[dict[str, Any]] | None = None,
     ) -> AsyncIterator[dict[str, Any]]:
-        """Direct HTTP SSE streaming from Google Gemini REST API with ReAct Function Calling (BEH-061)."""
+        """Direct HTTP SSE streaming from Google Gemini REST API with ReAct Function Calling (BEH-061) and Multimodal Vision (BEH-064)."""
         from beherit.core.tools import CapabilitiesGuard
 
         guard = CapabilitiesGuard(default_workspace=self.auth_manager.base_dir)
@@ -255,7 +268,35 @@ class AntigravityEngine(BaseAgentEngine):
                 content = h.get("content", "")
                 if content:
                     contents.append({"role": role, "parts": [{"text": content}]})
-        contents.append({"role": "user", "parts": [{"text": message}]})
+
+        user_parts: list[dict[str, Any]] = [{"text": message}]
+        if attachments:
+            for att in attachments:
+                ctype = att.get("content_type", "")
+                fname = att.get("filename", "plik")
+                b64 = att.get("base64_data")
+                if not b64 and att.get("path"):
+                    p = Path(att["path"])
+                    if p.exists():
+                        try:
+                            b64 = base64.b64encode(p.read_bytes()).decode("ascii")
+                        except Exception:
+                            pass
+                if b64 and (ctype.startswith("image/") or ctype == "application/pdf"):
+                    user_parts.append({
+                        "inlineData": {
+                            "mimeType": ctype or "image/png",
+                            "data": b64,
+                        }
+                    })
+                elif att.get("path") and Path(att["path"]).exists():
+                    try:
+                        text_val = Path(att["path"]).read_text(encoding="utf-8", errors="replace")
+                        user_parts.append({"text": f"### Zawartość pliku {fname}:\n{text_val}"})
+                    except Exception:
+                        pass
+
+        contents.append({"role": "user", "parts": user_parts})
 
         yield {"event": "thought", "data": f"Nawiązywanie bezpośredniego połączenia z Google Gemini API ({model})..."}
 

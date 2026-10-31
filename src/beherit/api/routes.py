@@ -1,6 +1,7 @@
 """REST API Routes for Agent CRUD, Per-Agent Auth, and Streaming Chat."""
 
 import asyncio
+import base64
 import hmac
 import json
 import re
@@ -221,10 +222,20 @@ class ImportLocalAuthRequest(BaseModel):
     provider: EngineType = Field(default=EngineType.CLAUDE_CODE)
 
 
+class ChatAttachment(BaseModel):
+    filename: str
+    content_type: str = "application/octet-stream"
+    url: str | None = None
+    path: str | None = None
+    base64_data: str | None = None
+    size_bytes: int | None = None
+
+
 class ChatMessageRequest(BaseModel):
     message: str = Field(..., min_length=1)
     session_id: str | None = Field(default=None, description="Optional ID of active chat session")
     history: list[dict[str, str]] | None = Field(default_factory=list)
+    attachments: list[ChatAttachment] = Field(default_factory=list, description="Uploaded files and images (BEH-064)")
 
 
 class CreateChatSessionRequest(BaseModel):
@@ -1315,8 +1326,15 @@ async def stream_agent_chat(slug: str, payload: ChatMessageRequest):
             if m.get("role") in ("user", "assistant")
         ]
 
-    # Persist user message to SQLite
-    db_mgr.add_chat_message(session_id, slug, role="user", content=payload.message)
+    # Persist user message to SQLite (with optional attachments, BEH-064)
+    raw_attachments = [a.model_dump() for a in payload.attachments] if payload.attachments else []
+    db_mgr.add_chat_message(
+        session_id=session_id,
+        agent_slug=slug,
+        role="user",
+        content=payload.message,
+        attachments=raw_attachments,
+    )
 
     async def event_generator():
         # Inform client about active session ID
@@ -1334,7 +1352,7 @@ async def stream_agent_chat(slug: str, payload: ChatMessageRequest):
 
         engine = engine_registry.get_engine(agent.engine)
         try:
-            async for chunk in engine.stream_chat(agent, payload.message, history):
+            async for chunk in engine.stream_chat(agent, payload.message, history, attachments=raw_attachments):
                 event = chunk.get("event", "message")
                 data = chunk.get("data", "")
 
@@ -1398,4 +1416,83 @@ async def cancel_agent_chat(slug: str):
         "process_terminated": proc_terminated,
         "task_cancelled": task_cancelled,
     }
+
+
+# --- Chat Multimodal Attachments Endpoints (BEH-064) ---
+
+
+@router.post("/{slug}/chat/upload")
+async def upload_chat_attachment(slug: str, file: UploadFile = File(...)):
+    """Upload an image or document to be attached to a chat message (BEH-064)."""
+    agent = repo.load_agent(slug)
+    if not agent:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Agent not found.")
+
+    agent_dir = Path(agent.file_path).parent if agent.file_path else (repo.base_dir / slug)
+    uploads_dir = agent_dir / "uploads"
+    uploads_dir.mkdir(parents=True, exist_ok=True)
+
+    safe_original = Path(file.filename or "upload").name
+    stem = re.sub(r"[^a-zA-Z0-9_\-]", "_", Path(safe_original).stem)
+    suffix = Path(safe_original).suffix.lower()
+    timestamp = int(time.time() * 1000)
+    saved_filename = f"{stem}_{timestamp}{suffix}"
+    target_path = uploads_dir / saved_filename
+
+    content = await file.read()
+    target_path.write_bytes(content)
+
+    content_type = file.content_type or "application/octet-stream"
+    if not file.content_type or file.content_type == "application/octet-stream":
+        if suffix in (".png", ".jpg", ".jpeg", ".webp", ".gif"):
+            content_type = f"image/{suffix.lstrip('.')}"
+            if suffix == ".jpg":
+                content_type = "image/jpeg"
+        elif suffix == ".pdf":
+            content_type = "application/pdf"
+        elif suffix in (".txt", ".md", ".json", ".csv"):
+            content_type = "text/plain"
+
+    is_img = content_type.startswith("image/")
+    base64_repr = None
+    if is_img and len(content) < 5 * 1024 * 1024:
+        base64_repr = base64.b64encode(content).decode("ascii")
+
+    return {
+        "filename": safe_original,
+        "saved_filename": saved_filename,
+        "content_type": content_type,
+        "path": str(target_path),
+        "url": f"/api/agents/{slug}/uploads/{saved_filename}",
+        "size_bytes": len(content),
+        "is_image": is_img,
+        "base64_data": base64_repr,
+    }
+
+
+@router.get("/{slug}/uploads/{filename}")
+async def get_uploaded_attachment(slug: str, filename: str):
+    """Retrieve an uploaded attachment file (images, documents) for preview (BEH-064)."""
+    agent = repo.load_agent(slug)
+    if not agent:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Agent not found.")
+
+    safe_name = Path(filename).name
+    agent_dir = Path(agent.file_path).parent if agent.file_path else (repo.base_dir / slug)
+    target_path = agent_dir / "uploads" / safe_name
+    if not target_path.exists():
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Attachment file not found.")
+
+    suffix = target_path.suffix.lower()
+    media_type = "application/octet-stream"
+    if suffix in (".png", ".jpg", ".jpeg", ".webp", ".gif"):
+        media_type = f"image/{suffix.lstrip('.')}"
+        if suffix == ".jpg":
+            media_type = "image/jpeg"
+    elif suffix == ".pdf":
+        media_type = "application/pdf"
+    elif suffix in (".txt", ".md", ".json", ".csv"):
+        media_type = "text/plain"
+
+    return FileResponse(target_path, media_type=media_type)
 
