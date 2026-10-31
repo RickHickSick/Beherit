@@ -239,6 +239,21 @@ class UpdateMemoryRequest(BaseModel):
     content: str = Field(..., description="Full content of memory.md")
 
 
+class UpdateTodoRequest(BaseModel):
+    content: str | None = Field(None, description="Full raw markdown of todo.md")
+    action: str | None = Field(None, description="Action: add, update, or clear")
+    text: str | None = Field(None, description="Task text")
+    item_id: int | str | None = Field(None, description="Task ID or match")
+    status: str | None = Field(None, description="Task status: todo, in_progress, done, cancelled")
+
+
+class RunGoalRequest(BaseModel):
+    goal: str = Field(..., min_length=3, description="High-level engineering or research goal")
+    max_steps: int = Field(10, ge=1, le=50, description="Maximum iterations for goal loop")
+    auto_decompose: bool = Field(True, description="Decompose into todo.md in step 1")
+    auto_save_report: bool = Field(True, description="Save markdown report to Notatki/Raporty")
+
+
 class ExecuteToolRequest(BaseModel):
     tool: str = Field(..., description="Tool name: execute_bash, read_file, write_file, list_dir")
     args: dict[str, Any] = Field(default_factory=dict)
@@ -657,6 +672,83 @@ async def update_agent_memory(slug: str, payload: UpdateMemoryRequest):
         "slug": slug,
         "file_path": str(mem_file),
     }
+
+
+# --- Agent Scratchpad & Autonomous Goal Endpoints (BEH-063) ---
+
+
+@router.get("/{slug}/todo")
+async def get_agent_todo(slug: str):
+    """Retrieve scratchpad todo.md tasks and progress summary for an agent (BEH-063)."""
+    agent = repo.load_agent(slug)
+    if not agent:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Agent not found.")
+    from beherit.core.todo import AgentTodoManager
+    todo_mgr = AgentTodoManager(base_dir=repo.base_dir)
+    return {
+        "slug": slug,
+        "todos": todo_mgr.read_todos(agent),
+        "summary": todo_mgr.get_summary(agent),
+        "raw": todo_mgr.read_raw(agent),
+        "file_path": str(todo_mgr.get_todo_path(agent)),
+    }
+
+
+@router.put("/{slug}/todo")
+async def update_agent_todo(slug: str, payload: UpdateTodoRequest):
+    """Directly update or manipulate tasks in agent's todo.md scratchpad (BEH-063)."""
+    agent = repo.load_agent(slug)
+    if not agent:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Agent not found.")
+    from beherit.core.todo import AgentTodoManager
+    todo_mgr = AgentTodoManager(base_dir=repo.base_dir)
+
+    if payload.content is not None:
+        todo_mgr.write_raw(agent, payload.content)
+    elif payload.action == "add":
+        if not payload.text:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="'text' is required for action 'add'.")
+        todo_mgr.add_item(agent, text=payload.text, status=payload.status or "todo")
+    elif payload.action == "update":
+        todo_mgr.update_item(agent, item_id=payload.item_id, status=payload.status, text=payload.text)
+    elif payload.action == "clear":
+        todo_mgr.clear_todos(agent)
+
+    return {
+        "status": "updated",
+        "slug": slug,
+        "todos": todo_mgr.read_todos(agent),
+        "summary": todo_mgr.get_summary(agent),
+        "raw": todo_mgr.read_raw(agent),
+    }
+
+
+@router.post("/{slug}/goal")
+async def run_agent_goal(slug: str, payload: RunGoalRequest):
+    """Run an autonomous multi-step goal loop with scratchpad management (BEH-063)."""
+    agent = repo.load_agent(slug)
+    if not agent:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Agent not found.")
+
+    from beherit.core.goal_runner import AutonomousGoalRunner
+    runner = AutonomousGoalRunner(base_dir=repo.base_dir)
+
+    async def goal_event_generator():
+        async for evt_dict in runner.run_goal(
+            agent=agent,
+            goal=payload.goal,
+            max_steps=payload.max_steps,
+            auto_decompose=payload.auto_decompose,
+            auto_save_report=payload.auto_save_report,
+        ):
+            event_name = evt_dict.get("event", "goal_event")
+            data_payload = evt_dict.get("data") if "data" in evt_dict else evt_dict
+            yield {
+                "event": event_name,
+                "data": json.dumps(data_payload, ensure_ascii=False) if not isinstance(data_payload, str) else data_payload,
+            }
+
+    return EventSourceResponse(goal_event_generator())
 
 
 @router.get("/{slug}/history")

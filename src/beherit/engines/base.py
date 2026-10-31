@@ -45,6 +45,22 @@ class BaseAgentEngine(ABC):
         except Exception:
             pass
 
+        # Ingest active task plan and scratchpad (BEH-063)
+        try:
+            from beherit.core.todo import AgentTodoManager
+            todo_mgr = AgentTodoManager()
+            todo_items = todo_mgr.read_todos(agent)
+            if todo_items:
+                raw_todo = todo_mgr.read_raw(agent)
+                parts.append(
+                    "## Aktywny Plan Działań i Scratchpad (todo.md)\n"
+                    "Posiadasz dynamiczny scratchpad zadań. Używaj narzędzia `manage_todo(action='update', item_id=..., status='done')` "
+                    "do aktualizowania postępu w miarę realizacji kolejnych etapów:\n"
+                    f"{raw_todo}"
+                )
+        except Exception:
+            pass
+
         # Add available peer agents for delegation (BEH-060)
         try:
             from beherit.core.repository import AgentRepository

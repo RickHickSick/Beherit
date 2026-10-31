@@ -134,6 +134,34 @@ class MCPServer:
             }
         })
 
+        # Task scratchpad and planning tools (BEH-063)
+        tools.append({
+            "name": "manage_todo",
+            "description": "Zarządzanie dynamicznym planem zadań i scratchpadem todo.md w trybie autonomicznym. Umożliwia dodawanie (action='add', text='...'), aktualizację statusu (action='update', item_id=N, status='done'|'in_progress'|'todo'|'cancelled'), listowanie (action='list') oraz czyszczenie zadań (action='clear').",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "action": {
+                        "type": "string",
+                        "description": "Akcja: 'list', 'add', 'update', 'clear'"
+                    },
+                    "text": {
+                        "type": "string",
+                        "description": "Opis zadania (wymagany przy action='add', opcjonalny przy 'update')"
+                    },
+                    "item_id": {
+                        "type": "integer",
+                        "description": "Identyfikator numeryczny zadania do aktualizacji (wymagany przy action='update')"
+                    },
+                    "status": {
+                        "type": "string",
+                        "description": "Nowy status zadania: 'todo', 'in_progress', 'done', 'cancelled'"
+                    }
+                },
+                "required": ["action"]
+            }
+        })
+
         return tools
 
     async def handle_request(self, message: dict[str, Any]) -> dict[str, Any] | None:

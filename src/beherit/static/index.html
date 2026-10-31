@@ -361,12 +361,38 @@
             </button>
           </div>
 
+          <!-- Plan / Scratchpad Button (BEH-063) -->
+          <button @click="openTodoModal = true; loadAgentTodo()" title="Plan Działań & Scratchpad (todo.md)" class="flex items-center gap-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-emerald-400 text-xs px-2.5 py-1.5 rounded-lg border border-slate-700 transition">
+            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
+            </svg>
+            <span class="hidden sm:inline">Plan</span>
+            <span x-show="agentTodoSummary && agentTodoSummary.total > 0" class="text-[10px] bg-emerald-500/20 text-emerald-400 px-1.5 py-0.5 rounded-full font-mono font-semibold" x-text="`${agentTodoSummary.done}/${agentTodoSummary.total}`"></span>
+          </button>
+
           <!-- Agent Selector -->
           <select x-model="selectedAgentSlug" @change="switchActiveAgent()" class="bg-slate-800 text-slate-200 text-xs px-3 py-1.5 rounded-lg border border-slate-700 outline-none">
             <template x-for="agent in agents" :key="agent.slug">
               <option :value="agent.slug" x-text="agent.name"></option>
             </template>
           </select>
+        </div>
+      </div>
+
+      <!-- Active Plan Strip (BEH-063) -->
+      <div x-show="agentTodoSummary && agentTodoSummary.total > 0" class="px-5 py-2 bg-slate-900/90 border-b border-slate-800 flex items-center justify-between text-xs text-slate-300 shrink-0">
+        <div class="flex items-center gap-2">
+          <span class="text-emerald-400 font-medium flex items-center gap-1">
+            <span>📋</span> Plan zadań:
+          </span>
+          <span x-text="`${agentTodoSummary.done} z ${agentTodoSummary.total} ukończonych (${agentTodoSummary.progress_percent}%)`"></span>
+          <span x-show="agentTodoSummary.all_done" class="text-emerald-400 font-semibold ml-2">✓ Osiągnięto cel</span>
+        </div>
+        <div class="flex items-center gap-3">
+          <div class="w-28 sm:w-40 bg-slate-800 rounded-full h-2 overflow-hidden ring-1 ring-slate-700">
+            <div class="bg-gradient-to-r from-emerald-500 to-teal-400 h-2 transition-all duration-300" :style="`width: ${agentTodoSummary.progress_percent}%`"></div>
+          </div>
+          <button @click="openTodoModal = true; loadAgentTodo()" class="text-xs text-emerald-400 hover:underline">Szczegóły</button>
         </div>
       </div>
 
@@ -2201,6 +2227,77 @@
     </div>
   </div>
 
+  <!-- MODAL: TASK PLANNER & AUTONOMOUS GOAL RUNNER (BEH-063) -->
+  <div x-show="openTodoModal" class="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4" style="display: none;">
+    <div @click.away="openTodoModal = false" class="bg-slate-900 border border-slate-800 w-full max-w-2xl rounded-2xl p-6 shadow-2xl space-y-4 max-h-[90vh] flex flex-col">
+      <!-- Header -->
+      <div class="flex items-center justify-between border-b border-slate-800 pb-3 shrink-0">
+        <div>
+          <h3 class="text-base font-bold text-slate-100 flex items-center gap-2">
+            <span>📋</span> Plan Działań i Scratchpad: <span class="text-emerald-400" x-text="activeAgent ? activeAgent.name : ''"></span>
+          </h3>
+          <p class="text-xs text-slate-400">Rejestr zadań (todo.md) oraz tryb autonomicznego rozwiązywania celów (Goal Loop).</p>
+        </div>
+        <button @click="openTodoModal = false" class="text-slate-400 hover:text-slate-200">✕</button>
+      </div>
+
+      <!-- Autonomous Goal Trigger -->
+      <div class="bg-slate-950/60 p-3.5 rounded-xl border border-slate-800 space-y-2 shrink-0">
+        <label class="block text-xs font-semibold text-emerald-400">⚡ Uruchom Cel Autonomiczny (Autonomous Goal):</label>
+        <div class="flex gap-2">
+          <input type="text" x-model="goalInputText" placeholder="np. Zoptymalizuj zapytania SQL, przetestuj endpointy i przygotuj raport..." class="flex-1 bg-slate-900 text-slate-100 px-3 py-2 rounded-lg border border-slate-700 outline-none text-xs focus:border-emerald-400">
+          <button @click="startGoalRun()" :disabled="!goalInputText.trim() || isGoalRunning" class="bg-emerald-500 hover:bg-emerald-400 disabled:opacity-50 text-slate-950 font-bold px-4 py-2 rounded-lg text-xs transition flex items-center gap-1.5 shrink-0">
+            <span x-show="!isGoalRunning">🚀 Rozpocznij Cel</span>
+            <span x-show="isGoalRunning">Wykonywanie pętli...</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- Task List Container -->
+      <div class="flex-1 overflow-y-auto space-y-2 min-h-0 custom-scroll pr-1">
+        <template x-if="agentTodos.length === 0">
+          <div class="text-center py-8 text-slate-500 text-xs">
+            Brak aktywnych zadań w todo.md. Dodaj pierwsze zadanie poniżej lub uruchom cel autonomiczny.
+          </div>
+        </template>
+        <template x-for="item in agentTodos" :key="item.id">
+          <div class="flex items-center justify-between p-2.5 rounded-xl border bg-slate-800/40 border-slate-800 hover:border-slate-700 transition">
+            <div class="flex items-center gap-3">
+              <!-- Status Toggle -->
+              <button @click="cycleTodoStatus(item)" class="w-5 h-5 rounded flex items-center justify-center text-xs font-bold transition"
+                      :class="{
+                        'bg-slate-800 text-slate-500 border border-slate-700': item.status === 'todo',
+                        'bg-amber-500/20 text-amber-400 border border-amber-500/40': item.status === 'in_progress',
+                        'bg-emerald-500/20 text-emerald-400 border border-emerald-500/40': item.status === 'done',
+                        'bg-rose-500/20 text-rose-400 border border-rose-500/40': item.status === 'cancelled'
+                      }">
+                <span x-show="item.status === 'done'">✓</span>
+                <span x-show="item.status === 'in_progress'">/</span>
+                <span x-show="item.status === 'cancelled'">-</span>
+                <span x-show="item.status === 'todo'"></span>
+              </button>
+              <span class="text-xs text-slate-200" :class="{'line-through text-slate-500': item.status === 'done' || item.status === 'cancelled'}" x-text="item.text"></span>
+            </div>
+            <span class="text-[10px] px-2 py-0.5 rounded font-mono uppercase"
+                  :class="{
+                    'bg-slate-800 text-slate-400': item.status === 'todo',
+                    'bg-amber-400/20 text-amber-300': item.status === 'in_progress',
+                    'bg-emerald-400/20 text-emerald-300': item.status === 'done',
+                    'bg-rose-400/20 text-rose-300': item.status === 'cancelled'
+                  }" x-text="item.status"></span>
+          </div>
+        </template>
+      </div>
+
+      <!-- Quick Add New Item -->
+      <div class="flex gap-2 pt-2 border-t border-slate-800 shrink-0">
+        <input type="text" x-model="newTodoText" @keydown.enter="addTodoItem()" placeholder="Wpisz treść nowego podzadania..." class="flex-1 bg-slate-800 text-slate-100 px-3 py-2 rounded-lg border border-slate-700 outline-none text-xs focus:border-emerald-400">
+        <button @click="addTodoItem()" :disabled="!newTodoText.trim()" class="bg-slate-800 hover:bg-slate-700 text-slate-200 px-4 py-2 rounded-lg text-xs font-medium border border-slate-700">＋ Dodaj</button>
+        <button @click="clearAgentTodos()" class="text-rose-400 hover:text-rose-300 hover:bg-rose-500/10 px-3 py-2 rounded-lg text-xs transition">Wyczyść</button>
+      </div>
+    </div>
+  </div>
+
   <!-- MODAL: SESSION TITLE / NEW SESSION (BEH-051) -->
   <div x-show="openSessionModal" class="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4" style="display: none;">
     <div @click.away="openSessionModal = false" class="bg-slate-900 border border-slate-800 w-full max-w-md rounded-2xl p-6 shadow-2xl space-y-4">
@@ -2340,6 +2437,15 @@
         openSessionModal: false,
         sessionModalMode: 'edit',
         sessionModalTitle: '',
+
+        // Task Planner & Autonomous Goal (BEH-063)
+        openTodoModal: false,
+        agentTodos: [],
+        agentTodoSummary: { total: 0, done: 0, in_progress: 0, todo: 0, progress_percent: 0.0, all_done: false },
+        agentTodoRaw: '',
+        newTodoText: '',
+        goalInputText: '',
+        isGoalRunning: false,
 
         // Engine model presets
         engineModelOptions: {
@@ -2585,6 +2691,7 @@
           this.selectedAgentSlug = agent.slug;
           this.currentView = 'chat';
           await this.loadAgentSessions(agent.slug);
+          await this.loadAgentTodo();
         },
 
         async loadAgentSessions(slug) {
@@ -2883,6 +2990,146 @@
             const c = document.getElementById('chat-messages-container');
             if (c) c.scrollTop = c.scrollHeight;
           });
+        },
+
+        // Task Planner & Autonomous Goal (BEH-063)
+        async loadAgentTodo() {
+          if (!this.activeAgent) return;
+          try {
+            const res = await this.apiFetch(`/api/agents/${this.activeAgent.slug}/todo`);
+            if (res.ok) {
+              const data = await res.json();
+              this.agentTodos = data.todos || [];
+              this.agentTodoSummary = data.summary || { total: 0, done: 0, in_progress: 0, todo: 0, progress_percent: 0.0, all_done: false };
+              this.agentTodoRaw = data.raw || '';
+            }
+          } catch (e) {
+            console.error('Failed to load agent todo:', e);
+          }
+        },
+
+        async addTodoItem() {
+          if (!this.activeAgent || !this.newTodoText.trim()) return;
+          try {
+            const res = await this.apiFetch(`/api/agents/${this.activeAgent.slug}/todo`, {
+              method: 'PUT',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ action: 'add', text: this.newTodoText.trim() })
+            });
+            if (res.ok) {
+              this.newTodoText = '';
+              await this.loadAgentTodo();
+            }
+          } catch (e) {
+            console.error('Failed to add todo item:', e);
+          }
+        },
+
+        async cycleTodoStatus(item) {
+          if (!this.activeAgent) return;
+          const order = { 'todo': 'in_progress', 'in_progress': 'done', 'done': 'cancelled', 'cancelled': 'todo' };
+          const nextStatus = order[item.status] || 'todo';
+          try {
+            const res = await this.apiFetch(`/api/agents/${this.activeAgent.slug}/todo`, {
+              method: 'PUT',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ action: 'update', item_id: item.id, status: nextStatus })
+            });
+            if (res.ok) {
+              await this.loadAgentTodo();
+            }
+          } catch (e) {
+            console.error('Failed to update todo status:', e);
+          }
+        },
+
+        async clearAgentTodos() {
+          if (!this.activeAgent) return;
+          if (!confirm('Czy na pewno chcesz wyczyścić cały plan zadań todo.md?')) return;
+          try {
+            const res = await this.apiFetch(`/api/agents/${this.activeAgent.slug}/todo`, {
+              method: 'PUT',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ action: 'clear' })
+            });
+            if (res.ok) {
+              await this.loadAgentTodo();
+            }
+          } catch (e) {
+            console.error('Failed to clear todos:', e);
+          }
+        },
+
+        async startGoalRun() {
+          if (!this.activeAgent || !this.goalInputText.trim() || this.isGoalRunning) return;
+          const goal = this.goalInputText.trim();
+          this.isGoalRunning = true;
+          this.haptic();
+
+          // Push notice to chat
+          this.chatMessages.push({
+            role: 'user',
+            content: `🎯 **Uruchomiono Cel Autonomiczny (Goal-driven Loop):**\n${goal}`
+          });
+          const assistantMsgIdx = this.chatMessages.push({
+            role: 'assistant',
+            content: 'Rozpoczynam autonomiczną pętlę planowania i realizacji celu...'
+          }) - 1;
+
+          try {
+            const response = await fetch(`/api/agents/${this.activeAgent.slug}/goal`, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                ...(this.systemToken ? { 'X-Beherit-Token': this.systemToken } : {})
+              },
+              body: JSON.stringify({
+                goal: goal,
+                max_steps: 10,
+                auto_decompose: true,
+                auto_save_report: true
+              })
+            });
+
+            if (!response.ok) throw new Error('Nie udało się uruchomić pętli celów');
+
+            const reader = response.body.getReader();
+            const decoder = new TextDecoder();
+            let buffer = '';
+
+            while (true) {
+              const { done, value } = await reader.read();
+              if (done) break;
+
+              buffer += decoder.decode(value, { stream: true });
+              const lines = buffer.split('\n');
+              buffer = lines.pop() || '';
+
+              for (const line of lines) {
+                if (line.startsWith('data: ')) {
+                  try {
+                    const parsed = JSON.parse(line.slice(6));
+                    if (parsed.event === 'step_finished' || parsed.todos) {
+                      await this.loadAgentTodo();
+                    }
+                    if (parsed.turn_output) {
+                      this.chatMessages[assistantMsgIdx].content += `\n\n**Etap zakończony:**\n${parsed.turn_output}`;
+                    } else if (parsed.event === 'goal_completed') {
+                      this.chatMessages[assistantMsgIdx].content += `\n\n🎉 **Cel osiągnięty pomyślnie!**\nRaport zapisano w: \`${parsed.report_file || 'Notatki/Raporty'}\``;
+                      await this.loadAgentTodo();
+                    }
+                  } catch (e) {
+                    // non-json or text
+                  }
+                }
+              }
+            }
+          } catch (err) {
+            this.chatMessages[assistantMsgIdx].content += `\n\n❌ Błąd podczas realizacji celu: ${err.message}`;
+          } finally {
+            this.isGoalRunning = false;
+            await this.loadAgentTodo();
+          }
         },
 
         renderMarkdown(text) {

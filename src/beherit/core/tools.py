@@ -224,6 +224,41 @@ class CapabilitiesGuard:
         except Exception as e:
             return {"success": False, "error": str(e)}
 
+    def manage_todo(
+        self,
+        agent: AgentModel,
+        action: str = "list",
+        text: str | None = None,
+        item_id: int | str | None = None,
+        status: str | None = None,
+    ) -> dict[str, Any]:
+        """Manage agent scratchpad and task checklist in todo.md (BEH-063)."""
+        from beherit.core.todo import AgentTodoManager
+
+        mgr = AgentTodoManager(base_dir=self.default_workspace)
+        action = (action or "list").lower()
+
+        if action == "list":
+            return {
+                "success": True,
+                "action": "list",
+                "todos": mgr.read_todos(agent),
+                "summary": mgr.get_summary(agent),
+                "raw": mgr.read_raw(agent),
+            }
+        elif action == "add":
+            if not text:
+                return {"success": False, "error": "Argument 'text' is required when adding a todo task."}
+            return mgr.add_item(agent, text=text, status=status or "todo")
+        elif action == "update":
+            if item_id is None and not text:
+                return {"success": False, "error": "Argument 'item_id' or 'text' is required to update a task."}
+            return mgr.update_item(agent, item_id=item_id, status=status, text=text)
+        elif action == "clear":
+            return mgr.clear_todos(agent)
+        else:
+            return {"success": False, "error": f"Unknown action '{action}'. Use: list, add, update, clear."}
+
     def get_tools_schema(self, agent: AgentModel, provider: str = "gemini") -> Any:
         """
         Generate tool declarations for direct HTTP API calls (BEH-061 Function Calling).
@@ -327,6 +362,34 @@ class CapabilitiesGuard:
                     "pattern": {"type": "string", "description": "Keyword or text snippet to remove from memory"}
                 },
                 "required": ["pattern"]
+            }
+        })
+
+        # Task scratchpad and planning tools (BEH-063)
+        raw_tools.append({
+            "name": "manage_todo",
+            "description": "Zarządzanie dynamicznym planem zadań i scratchpadem todo.md w trybie autonomicznym. Umożliwia dodawanie (action='add', text='...'), aktualizację statusu (action='update', item_id=N, status='done'|'in_progress'|'todo'|'cancelled'), listowanie (action='list') oraz czyszczenie zadań (action='clear').",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "action": {
+                        "type": "string",
+                        "description": "Akcja do wykonania: 'list', 'add', 'update', 'clear'"
+                    },
+                    "text": {
+                        "type": "string",
+                        "description": "Opis zadania (wymagany przy action='add', opcjonalny przy 'update')"
+                    },
+                    "item_id": {
+                        "type": "integer",
+                        "description": "Identyfikator numeryczny zadania do aktualizacji (wymagany przy action='update')"
+                    },
+                    "status": {
+                        "type": "string",
+                        "description": "Nowy status zadania: 'todo', 'in_progress', 'done', 'cancelled'"
+                    }
+                },
+                "required": ["action"]
             }
         })
 
@@ -522,8 +585,14 @@ class CapabilitiesGuard:
             from beherit.core.memory import AgentMemoryManager
             mgr = AgentMemoryManager(base_dir=self.default_workspace)
             return mgr.forget_fact(agent, pattern)
+        elif tool_name == "manage_todo":
+            action = args.get("action", "list")
+            text = args.get("text")
+            item_id = args.get("item_id") or args.get("id")
+            status = args.get("status")
+            return self.manage_todo(agent, action=action, text=text, item_id=item_id, status=status)
         else:
             return {
                 "success": False,
-                "error": f"Unknown tool '{tool_name}'. Available: execute_bash, read_file, write_file, list_dir, call_agent, save_memory, recall_memory, forget_memory",
+                "error": f"Unknown tool '{tool_name}'. Available: execute_bash, read_file, write_file, list_dir, call_agent, save_memory, recall_memory, forget_memory, manage_todo",
             }
