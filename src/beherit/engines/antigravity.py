@@ -236,7 +236,12 @@ class AntigravityEngine(BaseAgentEngine):
         token: str,
         system_context: str | None,
     ) -> AsyncIterator[dict[str, Any]]:
-        """Direct HTTP SSE streaming from Google Gemini REST API."""
+        """Direct HTTP SSE streaming from Google Gemini REST API with ReAct Function Calling (BEH-061)."""
+        from beherit.core.tools import CapabilitiesGuard
+
+        guard = CapabilitiesGuard(default_workspace=self.auth_manager.base_dir)
+        tools_schema = guard.get_tools_schema(agent, provider="gemini")
+
         model = agent.model or "gemini-2.0-flash"
         if model.startswith("gemini-3.") or model == "default":
             model = "gemini-2.0-flash"
@@ -252,40 +257,49 @@ class AntigravityEngine(BaseAgentEngine):
                     contents.append({"role": role, "parts": [{"text": content}]})
         contents.append({"role": "user", "parts": [{"text": message}]})
 
-        body: dict[str, Any] = {"contents": contents}
-        if system_context:
-            body["systemInstruction"] = {"parts": [{"text": system_context}]}
-
         yield {"event": "thought", "data": f"Nawiązywanie bezpośredniego połączenia z Google Gemini API ({model})..."}
 
-        try:
-            async with httpx.AsyncClient(timeout=120.0) as client:
-                async with client.stream(
-                    "POST",
-                    url,
-                    headers={"Content-Type": "application/json"},
-                    json=body,
-                ) as response:
-                    if response.status_code != 200:
-                        err_body = await response.aread()
-                        try:
-                            err_json = json.loads(err_body.decode())
-                            err_msg = err_json.get("error", {}).get("message", err_body.decode())
-                        except Exception:
-                            err_msg = err_body.decode(errors="replace")
-                        yield {
-                            "event": "error",
-                            "data": {
-                                "error": f"Google Gemini API Error ({response.status_code}): {err_msg}",
-                                "code": f"HTTP_{response.status_code}",
-                            },
-                        }
-                        return
+        max_turns = 5
+        turn = 0
 
-                    async for line in response.aiter_lines():
-                        if not line:
-                            continue
-                        if line.startswith("data: "):
+        while turn < max_turns:
+            turn += 1
+            body: dict[str, Any] = {"contents": contents}
+            if system_context:
+                body["systemInstruction"] = {"parts": [{"text": system_context}]}
+            if tools_schema:
+                body["tools"] = tools_schema
+
+            tool_calls_to_execute = []
+            assistant_parts = []
+
+            try:
+                async with httpx.AsyncClient(timeout=120.0) as client:
+                    async with client.stream(
+                        "POST",
+                        url,
+                        headers={"Content-Type": "application/json"},
+                        json=body,
+                    ) as response:
+                        if response.status_code != 200:
+                            err_body = await response.aread()
+                            try:
+                                err_json = json.loads(err_body.decode())
+                                err_msg = err_json.get("error", {}).get("message", err_body.decode())
+                            except Exception:
+                                err_msg = err_body.decode(errors="replace")
+                            yield {
+                                "event": "error",
+                                "data": {
+                                    "error": f"Google Gemini API Error ({response.status_code}): {err_msg}",
+                                    "code": f"HTTP_{response.status_code}",
+                                },
+                            }
+                            return
+
+                        async for line in response.aiter_lines():
+                            if not line or not line.startswith("data: "):
+                                continue
                             data_str = line[6:].strip()
                             try:
                                 chunk_json = json.loads(data_str)
@@ -295,9 +309,53 @@ class AntigravityEngine(BaseAgentEngine):
                                     for part in parts:
                                         if "text" in part:
                                             yield {"event": "token", "data": part["text"]}
+                                            assistant_parts.append(part)
                                         elif "thought" in part:
                                             yield {"event": "thought", "data": part["thought"]}
+                                        elif "functionCall" in part:
+                                            fc = part["functionCall"]
+                                            tool_calls_to_execute.append(fc)
+                                            assistant_parts.append(part)
                             except json.JSONDecodeError:
                                 pass
-        except Exception as e:
-            yield {"event": "error", "data": {"error": f"Błąd połączenia z Google Gemini API: {str(e)}"}}
+
+            except Exception as e:
+                yield {"event": "error", "data": {"error": f"Błąd połączenia z Google Gemini API: {str(e)}"}}
+                return
+
+            if not tool_calls_to_execute:
+                break
+
+            # If tool calls were made, execute them and feed back to Gemini
+            if assistant_parts:
+                contents.append({"role": "model", "parts": assistant_parts})
+
+            for fc in tool_calls_to_execute:
+                tool_name = fc.get("name")
+                tool_args = fc.get("args", {})
+                yield {
+                    "event": "thought",
+                    "data": f"⚡ Wywołanie narzędzia: {tool_name}({json.dumps(tool_args, ensure_ascii=False)})...",
+                }
+                yield {
+                    "event": "tool_call",
+                    "data": {"tool": tool_name, "args": tool_args},
+                }
+
+                tool_result = await guard.dispatch_tool(agent, tool_name, tool_args)
+                summary = json.dumps(tool_result, ensure_ascii=False)
+                summary_snippet = summary if len(summary) <= 120 else f"{summary[:117]}..."
+                yield {
+                    "event": "thought",
+                    "data": f"✓ Zakończono {tool_name}: {summary_snippet}",
+                }
+
+                contents.append({
+                    "role": "user",
+                    "parts": [{
+                        "functionResponse": {
+                            "name": tool_name,
+                            "response": {"name": tool_name, "content": tool_result},
+                        }
+                    }],
+                })

@@ -133,3 +133,107 @@ async def test_direct_openai_api_stream(tmp_path: Path):
 
     tokens = "".join(e["data"] for e in events if e["event"] == "token")
     assert "Odpowiedź z OpenAI." in tokens
+
+
+@pytest.mark.asyncio
+async def test_direct_gemini_api_function_calling_react_loop(tmp_path: Path):
+    """Verify AntigravityEngine ReAct loop: intercepts functionCall, executes tool, and resumes stream (BEH-061)."""
+    from beherit.models.agent import AgentCapabilities
+
+    auth_mgr = AgentAuthManager(base_data_dir=tmp_path)
+    auth_mgr.save_manual_token("gemini-tool-agent", "AIzaSy_test_valid_key", provider=EngineType.ANTIGRAVITY)
+
+    agent = AgentModel(
+        name="Gemini Tool Agent",
+        slug="gemini-tool-agent",
+        engine=EngineType.ANTIGRAVITY,
+        model="gemini-2.0-flash",
+        capabilities=AgentCapabilities(terminal=True, file_read=True, file_write=True),
+    )
+
+    engine = AntigravityEngine(auth_manager=auth_mgr)
+    engine.cli_binary = None
+
+    # Turn 1: Model requests execute_bash tool
+    sse_turn1 = [
+        'data: {"candidates": [{"content": {"parts": [{"functionCall": {"name": "read_file", "args": {"path": "test.txt"}}}]}}]}'
+    ]
+    # Turn 2: After receiving functionResponse, model outputs final answer
+    sse_turn2 = [
+        'data: {"candidates": [{"content": {"parts": [{"text": "Zawartość pliku to: Dane testowe."}]}}]}'
+    ]
+
+    mock_client = MagicMock()
+    mock_client.stream = MagicMock(side_effect=[
+        MockAsyncResponse(200, sse_turn1),
+        MockAsyncResponse(200, sse_turn2),
+    ])
+
+    with patch("httpx.AsyncClient") as mock_client_cls, \
+         patch("beherit.core.tools.CapabilitiesGuard.read_file", return_value={"success": True, "content": "Dane testowe."}):
+        mock_client_cls.return_value.__aenter__.return_value = mock_client
+        events = []
+        async for chunk in engine.stream_chat(agent, "Przeczytaj test.txt"):
+            events.append(chunk)
+
+    tool_call_events = [e for e in events if e["event"] == "tool_call"]
+    assert len(tool_call_events) == 1
+    assert tool_call_events[0]["data"]["tool"] == "read_file"
+
+    tokens = "".join(e["data"] for e in events if e["event"] == "token")
+    assert "Zawartość pliku to: Dane testowe." in tokens
+
+
+@pytest.mark.asyncio
+async def test_direct_claude_api_function_calling_react_loop(tmp_path: Path):
+    """Verify ClaudeCodeEngine ReAct loop: intercepts tool_use, executes tool, and resumes stream (BEH-061)."""
+    from beherit.models.agent import AgentCapabilities
+
+    auth_mgr = AgentAuthManager(base_data_dir=tmp_path)
+    auth_mgr.save_manual_token("claude-tool-agent", "sk-ant-api03-test-valid-key", provider=EngineType.CLAUDE_CODE)
+
+    agent = AgentModel(
+        name="Claude Tool Agent",
+        slug="claude-tool-agent",
+        engine=EngineType.CLAUDE_CODE,
+        model="claude-3-5-sonnet",
+        capabilities=AgentCapabilities(terminal=True, file_read=True, file_write=True),
+    )
+
+    engine = ClaudeCodeEngine(auth_manager=auth_mgr)
+    engine.cli_binary = None
+
+    # Turn 1: Claude sends tool_use block
+    sse_turn1 = [
+        'data: {"type": "content_block_start", "index": 0, "content_block": {"type": "tool_use", "id": "toolu_123", "name": "read_file", "input": {}}}',
+        'data: {"type": "content_block_delta", "index": 0, "delta": {"type": "input_json_delta", "partial_json": "{\\"path\\": \\"info.txt\\"}"}}',
+        'data: {"type": "content_block_stop", "index": 0}',
+        'data: [DONE]',
+    ]
+    # Turn 2: Claude answers with final text
+    sse_turn2 = [
+        'data: {"type": "content_block_delta", "index": 0, "delta": {"type": "text_delta", "text": "Plik info.txt przeczytany pomyślnie!"}}',
+        'data: [DONE]',
+    ]
+
+    mock_client = MagicMock()
+    mock_client.stream = MagicMock(side_effect=[
+        MockAsyncResponse(200, sse_turn1),
+        MockAsyncResponse(200, sse_turn2),
+    ])
+
+    with patch("httpx.AsyncClient") as mock_client_cls, \
+         patch("beherit.core.tools.CapabilitiesGuard.read_file", return_value={"success": True, "content": "Plik info.txt"}):
+        mock_client_cls.return_value.__aenter__.return_value = mock_client
+        events = []
+        async for chunk in engine.stream_chat(agent, "Odczytaj info.txt"):
+            events.append(chunk)
+
+    tool_call_events = [e for e in events if e["event"] == "tool_call"]
+    assert len(tool_call_events) == 1
+    assert tool_call_events[0]["data"]["tool"] == "read_file"
+
+    tokens = "".join(e["data"] for e in events if e["event"] == "token")
+    assert "Plik info.txt przeczytany pomyślnie!" in tokens
+
+

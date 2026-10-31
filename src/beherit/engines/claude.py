@@ -182,7 +182,12 @@ class ClaudeCodeEngine(BaseAgentEngine):
         token: str,
         system_context: str | None,
     ) -> AsyncIterator[dict[str, Any]]:
-        """Direct HTTP streaming from Anthropic Messages API."""
+        """Direct HTTP streaming from Anthropic Messages API with ReAct Function Calling (BEH-061)."""
+        from beherit.core.tools import CapabilitiesGuard
+
+        guard = CapabilitiesGuard(default_workspace=self.auth_manager.base_dir)
+        tools_schema = guard.get_tools_schema(agent, provider="anthropic")
+
         model = agent.model or "claude-3-5-sonnet-20241022"
         if "sonnet" in model.lower() and not ("-" in model and any(c.isdigit() for c in model.split("-")[-1])):
             model = "claude-3-5-sonnet-20241022"
@@ -199,7 +204,7 @@ class ClaudeCodeEngine(BaseAgentEngine):
         else:
             headers["x-api-key"] = token
 
-        messages = []
+        messages: list[dict[str, Any]] = []
         if history:
             for h in history:
                 role = "user" if h.get("role") == "user" else "assistant"
@@ -208,58 +213,152 @@ class ClaudeCodeEngine(BaseAgentEngine):
                     messages.append({"role": role, "content": content})
         messages.append({"role": "user", "content": message})
 
-        payload: dict[str, Any] = {
-            "model": model,
-            "max_tokens": 4096,
-            "messages": messages,
-            "stream": True,
-        }
-        if system_context:
-            payload["system"] = system_context
-
         yield {"event": "thought", "data": f"Nawiązywanie bezpośredniego połączenia z Anthropic API ({model})..."}
 
-        try:
-            async with httpx.AsyncClient(timeout=120.0) as client:
-                async with client.stream(
-                    "POST",
-                    "https://api.anthropic.com/v1/messages",
-                    headers=headers,
-                    json=payload,
-                ) as response:
-                    if response.status_code != 200:
-                        err_body = await response.aread()
-                        try:
-                            err_json = json.loads(err_body.decode())
-                            err_msg = err_json.get("error", {}).get("message", err_body.decode())
-                        except Exception:
-                            err_msg = err_body.decode(errors="replace")
-                        yield {
-                            "event": "error",
-                            "data": {
-                                "error": f"Anthropic API Error ({response.status_code}): {err_msg}",
-                                "code": f"HTTP_{response.status_code}",
-                            },
-                        }
-                        return
+        max_turns = 5
+        turn = 0
 
-                    async for line in response.aiter_lines():
-                        if not line:
-                            continue
-                        if line.startswith("data: "):
+        while turn < max_turns:
+            turn += 1
+            payload: dict[str, Any] = {
+                "model": model,
+                "max_tokens": 4096,
+                "messages": messages,
+                "stream": True,
+            }
+            if system_context:
+                payload["system"] = system_context
+            if tools_schema:
+                payload["tools"] = tools_schema
+
+            active_tool_use: dict[str, Any] | None = None
+            tool_calls_to_execute: list[dict[str, Any]] = []
+            assistant_content_blocks: list[dict[str, Any]] = []
+            current_text_block = ""
+
+            try:
+                async with httpx.AsyncClient(timeout=120.0) as client:
+                    async with client.stream(
+                        "POST",
+                        "https://api.anthropic.com/v1/messages",
+                        headers=headers,
+                        json=payload,
+                    ) as response:
+                        if response.status_code != 200:
+                            err_body = await response.aread()
+                            try:
+                                err_json = json.loads(err_body.decode())
+                                err_msg = err_json.get("error", {}).get("message", err_body.decode())
+                            except Exception:
+                                err_msg = err_body.decode(errors="replace")
+                            yield {
+                                "event": "error",
+                                "data": {
+                                    "error": f"Anthropic API Error ({response.status_code}): {err_msg}",
+                                    "code": f"HTTP_{response.status_code}",
+                                },
+                            }
+                            return
+
+                        async for line in response.aiter_lines():
+                            if not line or not line.startswith("data: "):
+                                continue
                             data_str = line[6:].strip()
                             if data_str == "[DONE]":
                                 break
                             try:
                                 event_data = json.loads(data_str)
                                 event_type = event_data.get("type")
-                                if event_type == "content_block_delta":
+
+                                if event_type == "content_block_start":
+                                    block = event_data.get("content_block", {})
+                                    if block.get("type") == "tool_use":
+                                        active_tool_use = {
+                                            "id": block.get("id"),
+                                            "name": block.get("name"),
+                                            "input_json": "",
+                                        }
+                                    elif block.get("type") == "text":
+                                        current_text_block = ""
+
+                                elif event_type == "content_block_delta":
                                     delta = event_data.get("delta", {})
                                     if delta.get("type") == "text_delta":
-                                        yield {"event": "token", "data": delta.get("text", "")}
+                                        txt = delta.get("text", "")
+                                        current_text_block += txt
+                                        yield {"event": "token", "data": txt}
+                                    elif delta.get("type") == "input_json_delta" and active_tool_use:
+                                        active_tool_use["input_json"] += delta.get("partial_json", "")
+
+                                elif event_type == "content_block_stop":
+                                    if active_tool_use:
+                                        try:
+                                            parsed_args = json.loads(active_tool_use["input_json"]) if active_tool_use["input_json"].strip() else {}
+                                        except Exception:
+                                            parsed_args = {}
+                                        tool_calls_to_execute.append({
+                                            "id": active_tool_use["id"],
+                                            "name": active_tool_use["name"],
+                                            "input": parsed_args,
+                                        })
+                                        assistant_content_blocks.append({
+                                            "type": "tool_use",
+                                            "id": active_tool_use["id"],
+                                            "name": active_tool_use["name"],
+                                            "input": parsed_args,
+                                        })
+                                        active_tool_use = None
+                                    elif current_text_block:
+                                        assistant_content_blocks.append({
+                                            "type": "text",
+                                            "text": current_text_block,
+                                        })
+                                        current_text_block = ""
+
                                 elif event_type == "error":
                                     yield {"event": "error", "data": {"error": event_data.get("error", {}).get("message", "API Error")}}
                             except json.JSONDecodeError:
                                 pass
-        except Exception as e:
-            yield {"event": "error", "data": {"error": f"Błąd połączenia z Anthropic API: {str(e)}"}}
+
+            except Exception as e:
+                yield {"event": "error", "data": {"error": f"Błąd połączenia z Anthropic API: {str(e)}"}}
+                return
+
+            if not tool_calls_to_execute:
+                break
+
+            # Execute tool calls and feed back to Anthropic
+            if assistant_content_blocks:
+                messages.append({"role": "assistant", "content": assistant_content_blocks})
+
+            user_tool_results = []
+            for tc in tool_calls_to_execute:
+                tool_id = tc["id"]
+                tool_name = tc["name"]
+                tool_args = tc["input"]
+
+                yield {
+                    "event": "thought",
+                    "data": f"⚡ Wywołanie narzędzia: {tool_name}({json.dumps(tool_args, ensure_ascii=False)})...",
+                }
+                yield {
+                    "event": "tool_call",
+                    "data": {"tool": tool_name, "args": tool_args},
+                }
+
+                tool_res = await guard.dispatch_tool(agent, tool_name, tool_args)
+                summary = json.dumps(tool_res, ensure_ascii=False)
+                summary_snippet = summary if len(summary) <= 120 else f"{summary[:117]}..."
+                yield {
+                    "event": "thought",
+                    "data": f"✓ Zakończono {tool_name}: {summary_snippet}",
+                }
+
+                user_tool_results.append({
+                    "type": "tool_result",
+                    "tool_use_id": tool_id,
+                    "content": json.dumps(tool_res, ensure_ascii=False),
+                })
+
+            if user_tool_results:
+                messages.append({"role": "user", "content": user_tool_results})

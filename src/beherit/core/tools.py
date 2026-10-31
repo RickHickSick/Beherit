@@ -224,6 +224,127 @@ class CapabilitiesGuard:
         except Exception as e:
             return {"success": False, "error": str(e)}
 
+    def get_tools_schema(self, agent: AgentModel, provider: str = "gemini") -> Any:
+        """
+        Generate tool declarations for direct HTTP API calls (BEH-061 Function Calling).
+        Supports: 'gemini', 'anthropic', 'openai'.
+        """
+        caps = agent.capabilities
+        raw_tools = []
+
+        if caps.terminal and caps.terminal_mode != TerminalMode.DISABLED:
+            raw_tools.append({
+                "name": "execute_bash",
+                "description": f"Execute a shell command inside the agent's isolated workspace sandbox. Mode: {caps.terminal_mode.value}.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "command": {"type": "string", "description": "The command line string to run"}
+                    },
+                    "required": ["command"]
+                }
+            })
+
+        if caps.file_read:
+            raw_tools.append({
+                "name": "read_file",
+                "description": "Read text file contents from the agent workspace.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "path": {"type": "string", "description": "Relative path to file in workspace"}
+                    },
+                    "required": ["path"]
+                }
+            })
+            raw_tools.append({
+                "name": "list_dir",
+                "description": "List files and subdirectories in the agent workspace.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "path": {"type": "string", "description": "Relative directory path (default: '.')"}
+                    }
+                }
+            })
+
+        if caps.file_write:
+            raw_tools.append({
+                "name": "write_file",
+                "description": "Write or overwrite a file inside the agent workspace.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "path": {"type": "string", "description": "Relative file path to write"},
+                        "content": {"type": "string", "description": "Text content to write"}
+                    },
+                    "required": ["path", "content"]
+                }
+            })
+
+        # Multi-Agent delegation tool (BEH-060)
+        raw_tools.append({
+            "name": "call_agent",
+            "description": "Delegate a subtask or question to another specialized AI agent in Beherit.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "agent_slug": {"type": "string", "description": "Target agent slug"},
+                    "prompt": {"type": "string", "description": "Task prompt or instruction"},
+                    "context": {"type": "object", "description": "Optional dictionary context"}
+                },
+                "required": ["agent_slug", "prompt"]
+            }
+        })
+
+        if not raw_tools:
+            return None
+
+        if provider == "gemini":
+            func_decls = []
+            for t in raw_tools:
+                props = {}
+                for k, v in t["parameters"].get("properties", {}).items():
+                    v_copy = dict(v)
+                    if "type" in v_copy:
+                        v_copy["type"] = v_copy["type"].upper()
+                    props[k] = v_copy
+                func_decls.append({
+                    "name": t["name"],
+                    "description": t["description"],
+                    "parameters": {
+                        "type": "OBJECT",
+                        "properties": props,
+                        "required": t["parameters"].get("required", [])
+                    }
+                })
+            return [{"functionDeclarations": func_decls}]
+
+        elif provider == "anthropic":
+            anthropic_tools = []
+            for t in raw_tools:
+                anthropic_tools.append({
+                    "name": t["name"],
+                    "description": t["description"],
+                    "input_schema": t["parameters"]
+                })
+            return anthropic_tools
+
+        elif provider == "openai":
+            openai_tools = []
+            for t in raw_tools:
+                openai_tools.append({
+                    "type": "function",
+                    "function": {
+                        "name": t["name"],
+                        "description": t["description"],
+                        "parameters": t["parameters"]
+                    }
+                })
+            return openai_tools
+
+        return raw_tools
+
     async def call_agent(
         self,
         caller_agent: AgentModel,
