@@ -8,7 +8,7 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/)
-[![Version: 0.3.2](https://img.shields.io/badge/version-0.3.2-emerald.svg)](CHANGELOG.md)
+[![Version: 0.4.0](https://img.shields.io/badge/version-0.4.0-emerald.svg)](CHANGELOG.md)
 [![Architecture: Markdown-First](https://img.shields.io/badge/architecture-markdown--first-success.svg)]()
 [![Zero API Token Costs](https://img.shields.io/badge/cost-zero_api_tokens-brightgreen.svg)]()
 
@@ -18,6 +18,24 @@
 
 ## 🌟 Key Features
 
+* 🐝 **Multi-Agent Swarm & Delegation (v0.4.0):**
+  Agents can autonomously delegate subtasks to other specialized agents via `call_agent` with built-in recursion guard (`max_depth=3`) and live delegation tree visualization.
+* 🧠 **Persistent Long-Term Memory (v0.4.0):**
+  Per-agent `memory.md` knowledge store allowing agents to remember key user facts, preferences, and operational rules across sessions (`save_memory`, `recall_memory`, `forget_memory`).
+* 🎯 **Autonomous Goal Loop & Todo Scratchpad (v0.4.0):**
+  Self-directed task breakdown and execution tracking via `todo.md` with Kanban/Todo board in UI and automated status updates (`read_todos`, `update_todo`, `add_todo`).
+* 👁️ **Inbound Multimodal Vision in Chat (v0.4.0):**
+  Drag-and-drop image and PDF uploads directly in the chat interface with live previews and seamless vision processing across Gemini, Claude, and Antigravity engines.
+* 📋 **Bidirectional Plane API Integration (v0.4.0):**
+  Built-in agent tools to query, create, update, and comment on tasks within Plane project management (`plane_list_issues`, `plane_create_issue`, `plane_update_state`, `plane_add_comment`).
+* ⚡ **Dynamic Scriptable Skills (v0.4.0):**
+  Custom per-agent skills loaded dynamically from `skills/*.sh`, `*.py`, or `*.md` with automated tool synthesis and in-browser Skill Editor.
+* 🕸️ **Graph RAG & Obsidian Wikilinks Traversal (v0.4.0):**
+  Parses Obsidian `[[wikilinks]]` to build knowledge graphs with 1-hop and 2-hop contextual expansion and visual relationship explorer (`query_knowledge_graph`).
+* 🤖 **Bidirectional Telegram Bot Integration (v0.4.0):**
+  Embedded long-polling Telegram bot supporting multi-turn chats, streaming responses, agent switching (`/agent`), task inspection (`/todo`), and push alerts (`send_telegram_notification`).
+* 🔒 **Hardened Bubblewrap Sandbox (v0.4.0):**
+  Unprivileged container isolation for bash execution (`bwrap`) with read-only system mounts, private `/tmp`, process namespace unsharing, and graceful container fallback.
 * 🔑 **Per-Agent Subscription Isolation (Multi-Tenant Auth):**
   Create unlimited agents, each independently authenticated against its own profile (`.auth/`). Connect easily via CLI SDK session tokens or direct API keys (Google Gemini, Anthropic Claude, OpenAI) with 1-click server import.
 * 🧩 **Model Context Protocol (MCP) Built-in Server:**
@@ -25,14 +43,14 @@
 * 📚 **Local Semantic RAG (Knowledge Base):**
   Lightweight hybrid vector & BM25 retrieval powered by SQLite FTS5. Automatically chunks documents in `knowledge/` and injects only query-relevant context into system prompts, eliminating token bloat.
 * 📝 **Markdown-First Architecture:**
-  Every agent is defined as a plain directory with human-readable Markdown files (`agent.md`, `instructions.md`, `skills/`). Version-controlled, directly editable in Obsidian or VS Code, and synchronized with the Web UI.
+  Every agent is defined as a plain directory with human-readable Markdown files (`agent.md`, `instructions.md`, `memory.md`, `todo.md`, `skills/`). Version-controlled, directly editable in Obsidian or VS Code, and synchronized with the Web UI.
 * ⚡ **Zero Additional Token Costs:**
   Leverages desktop and cloud Agent SDK sessions instead of per-token API billing.
 * 📱 **Mobile PWA First (Safari iOS & Desktop):**
   Designed for seamless interaction on mobile devices (iOS safe-area, 100dvh, haptic feedback) with real-time SSE streaming, reasoning thoughts visibility, tool-call inspection, and stream cancellation (Stop button).
-* 💬 **Chat Session Management (v0.3.2):**
+* 💬 **Chat Session Management:**
   Create named conversation threads, edit titles on the fly, and safely delete chats with cascading SQLite message cleanup.
-* 📖 **In-App Interactive Manual & Guide (v0.3.2):**
+* 📖 **In-App Interactive Manual & Guide:**
   Full-featured documentation view right inside the application with instant live search and chapter filters. Also available in [docs/MANUAL.md](docs/MANUAL.md).
 * ⏰ **Dual Operational Modes:**
   * **Interactive Live Chat:** Multi-turn conversational threads with instant Abort / Stream cancellation.

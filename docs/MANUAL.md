@@ -1,9 +1,9 @@
 # Beherit — Oficjalny Podręcznik Użytkownika i Instrukcja Obsługi
 
-> **Wersja:** v0.3.2  
+> **Wersja:** v0.4.0  
 > **Projekt:** Beherit — Autonomiczna Platforma Agentów AI  
-> **Architektura:** Markdown-First · Per-Agent SDK Isolation · Zero API Token Costs · Local Hybrid RAG  
-> **Zarządzanie Zadaniami:** System Plane (`BEH-000` do `BEH-059`)
+> **Architektura:** Markdown-First · Per-Agent SDK Isolation · Multi-Agent Swarm · Zero API Token Costs · Local Hybrid & Graph RAG  
+> **Zarządzanie Zadaniami:** System Plane (`BEH-000` do `BEH-070`)
 
 ---
 
@@ -25,6 +25,15 @@
    - [Multimodalne Raporty i Wykrywanie Artefaktów](#multimodalne-raporty-i-wykrywanie-artefaktów)
    - [Piaskownica Uprawnień Terminala (CapabilitiesGuard)](#piaskownica-uprawnień-terminala-capabilitiesguard)
    - [Model Context Protocol (MCP) — Wbudowany Serwer i Klocki Integracji](#model-context-protocol-mcp--wbudowany-serwer-i-klocki-integracji)
+   - [Wieloagentowy Rój i Delegowanie Zadań (Multi-Agent Swarm)](#wieloagentowy-rój-i-delegowanie-zadań-multi-agent-swarm)
+   - [Pamięć Długoterminowa per Agent (memory.md)](#pamięć-długoterminowa-per-agent-memorymd)
+   - [Autonomiczna Pętla Celów i Tablica Zadań (todo.md)](#autonomiczna-pętla-celów-i-tablica-zadań-todomd)
+   - [Multimodalny Czat i Analiza Wizyjna](#multimodalny-czat-i-analiza-wizyjna)
+   - [Dwukierunkowa Integracja z Plane API](#dwukierunkowa-integracja-z-plane-api)
+   - [Dynamiczne Umiejętności Skryptowe (skills/)](#dynamiczne-umiejętności-skryptowe-skills)
+   - [Graph RAG i Wikilinki Obsidiana [[...]]](#graph-rag-i-wikilinki-obsidiana-)
+   - [Dwukierunkowy Bot Telegram](#dwukierunkowy-bot-telegram)
+   - [Utwardzony Sandbox Bubblewrap (bwrap)](#utwardzony-sandbox-bubblewrap-bwrap)
    - [Bezpieczeństwo Zero-Leak i Blokada PIN/Token](#bezpieczeństwo-zero-leak-i-blokada-pintoken)
 5. [Szczegółowy Słownik Funkcji i Elementów Interfejsu (UI)](#5-szczegółowy-słownik-funkcji-i-elementów-interfejsu-ui)
    - [Pulpit Główny i Karta Agenta](#pulpit-główny-i-karta-agenta)
@@ -289,6 +298,85 @@ Dla każdego agenta można zdefiniować jeden z 3 poziomów dostępu do powłoki
    - `GitHub` (Operacje na repozytoriach, issue i PR).
    - `Puppeteer` (Automatyzacja przeglądarki i rendering stron).
    - `Fetch` (Pobieranie stron i konwersja do Markdown).
+
+---
+
+### Wieloagentowy Rój i Delegowanie Zadań (Multi-Agent Swarm)
+
+W wersji v0.4.0 wprowadzono mechanizm współpracy wielu wyspecjalizowanych agentów:
+- Narzędzie `call_agent(agent_slug, prompt)` pozwala agentowi głównemu na podział złożonego problemu i oddelegowanie podzadań do innych agentów (np. agent programista wywołuje agenta analityka lub testera).
+- Wbudowany mechanizm **ochrony przed rekurencją** (`max_depth=3`) uniemożliwia powstanie nieskończonych pętli wzajemnych wywołań.
+- Interfejs Web UI wizualizuje drzewo delegacji w czasie rzeczywistym ze zdarzeniami `agent_delegation` i `agent_delegation_result`.
+
+---
+
+### Pamięć Długoterminowa per Agent (`memory.md`)
+
+Każdy agent dysponuje trwałym plikiem pamięci `memory.md` w swoim katalogu roboczym:
+- Narzędzia `save_memory(key, fact_content)`, `recall_memory(key)` oraz `forget_memory(key)` umożliwiają zapisywanie i wyszukiwanie faktów użytkownika, reguł biznesowych i ustaleń.
+- Pamięć jest automatycznie wstrzykiwana do promptu systemowego agenta w sekcji `[PERSISTENT LONG-TERM MEMORY]`.
+- W Web UI dostępna jest dedykowana zakładka edycji pamięci.
+
+---
+
+### Autonomiczna Pętla Celów i Tablica Zadań (`todo.md`)
+
+- Plik `todo.md` służy do dekompozycji i śledzenia etapów realizacji celów (`[ ]`, `[/]`, `[x]`).
+- Narzędzia `read_todos()`, `update_todo(task_id, status, notes)`, `add_todo(title, description, priority)` pozwalają modelowi na autonomiczne zarządzanie swoim postępem.
+- Użytkownik widzi stan zadań w czasie rzeczywistym na tablicy Kanban / Todo w oknie agenta.
+
+---
+
+### Multimodalny Czat i Analiza Wizyjna
+
+- Możliwość przeciągania plików i dodawania załączników graficznych (`.png`, `.jpg`, `.jpeg`, `.webp`) oraz dokumentów `.pdf` bezpośrednio w oknie rozmowy.
+- Automatyczne kodowanie do Base64 i bezpośrednia integracja z modelami multimodalnymi (Google Gemini Flash/Pro, Anthropic Claude Sonnet, Antigravity SDK).
+- Miniaturki załączników z możliwością usuwania przed wysłaniem.
+
+---
+
+### Dwukierunkowa Integracja z Plane API
+
+Agenci Beherit mogą zarządzać zadaniami w systemie Plane:
+- Narzędzia: `plane_list_issues`, `plane_create_issue`, `plane_update_state`, `plane_add_comment`.
+- Automatyczne mapowanie statusów (Backlog, Todo, In Progress, Done) i priorytetów.
+- Agent po zakończeniu pracy potrafi samodzielnie skomentować i zamknąć powierzone zadanie w Plane.
+
+---
+
+### Dynamiczne Umiejętności Skryptowe (`skills/`)
+
+- Katalog `skills/` w przestrzeni agenta pozwala na dodawanie skryptów powłoki (`.sh`), Pythona (`.py`) lub plików Markdown (`.md`).
+- Silnik automatycznie syntetyzuje narzędzia MCP `run_skill(skill_name, args)` oraz `skill_{name}`.
+- Wbudowany modal zarządzania umiejętnościami w Web UI pozwala tworzyć, edytować i testować skrypty w przeglądarce.
+
+---
+
+### Graph RAG i Wikilinki Obsidiana `[[...]]`
+
+- Silnik bazy wiedzy parsuje linki wiki Obsidiana (`[[Nazwa Notatki]]`, `[[Notatka|Alias]]`, `[[Notatka#Nagłówek]]`) i buduje graf połączeń w SQLite (`knowledge_links`).
+- Mechanizm wieloskokowej ekspansji (1-hop i 2-hop) wstrzykuje do kontekstu agenta nie tylko najbardziej trafne akapity, ale także powiązane notatki z grafu.
+- Narzędzie `query_knowledge_graph(starting_concept, hops)` oraz interaktywny eksplorator powiązań w UI.
+
+---
+
+### Dwukierunkowy Bot Telegram
+
+- Wbudowana usługa bota Telegram (`TelegramBotService`) działająca w trybie long-polling bez konieczności wystawiania publicznych portów na świat.
+- Bezpieczeństwo: filtrowanie po Telegram User ID (`TELEGRAM_ALLOWED_USER_IDS`).
+- Pełna obsługa poleceń `/start`, `/agents`, `/agent <slug>`, `/status`, `/todo`, `/clear` oraz strumieniowania odpowiedzi na żywo.
+- Narzędzie `send_telegram_notification(chat_id, message)` umożliwiające agentom wysyłanie alertów wprost na telefon użytkownika.
+
+---
+
+### Utwardzony Sandbox Bubblewrap (`bwrap`)
+
+- Wykonywanie poleceń powłoki bash w odizolowanym kontenerze Bubblewrap:
+  - Systemowe ścieżki (`/usr`, `/bin`) montowane w trybie tylko do odczytu (`--ro-bind`).
+  - Prywatny system plików `/tmp` w pamięci RAM (`--tmpfs`).
+  - Odizolowane przestrzenie nazw procesów, IPC i UTS (`--unshare-pid --unshare-ipc --unshare-uts`).
+  - Dostęp do zapisu wyłącznie w dedykowanym katalogu roboczym agenta.
+- Automatyczne wykrywanie ograniczeń jądra i płynny fallback do utwardzonego środowiska z filtrem regex w zagnieżdżonych kontenerach Docker.
 
 ---
 
