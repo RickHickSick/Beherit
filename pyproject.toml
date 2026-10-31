@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "beherit"
-version = "0.3.0"
+version = "0.3.2"
 description = "Autonomous AI Agent Management Platform powered by Agent SDKs with per-agent subscription isolation."
 readme = "README.md"
 authors = [
