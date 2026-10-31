@@ -791,7 +791,7 @@
       </div>
 
       <!-- CHAPTER 3: CAPABILITIES & ARCHITECTURE -->
-      <div x-show="(guideActiveChapter === 'all' || guideActiveChapter === 'capabilities') && guideMatches('możliwości platformy architektura markdown obsidian sse czat thinking abort anuluj multi-cron rag knowledge baza wiedzy pdf obrazy linki youtube multimodalne raporty artefakty sandbox capabilitiesguard mcp zero-leak')" class="bg-slate-900 border border-slate-800 rounded-2xl p-5 sm:p-6 space-y-5 shadow-sm">
+      <div x-show="(guideActiveChapter === 'all' || guideActiveChapter === 'capabilities') && guideMatches('możliwości platformy architektura markdown obsidian sse czat thinking abort anuluj multi-cron rag knowledge baza wiedzy pdf obrazy linki youtube multimodalne raporty artefakty sandbox capabilitiesguard mcp zero-leak swarm rój call_agent memory pamięć cel todo wizja plane skills graph telegram bubblewrap bwrap')" class="bg-slate-900 border border-slate-800 rounded-2xl p-5 sm:p-6 space-y-5 shadow-sm">
         <div class="flex items-center gap-2.5 pb-3 border-b border-slate-800">
           <span class="text-xl">🌐</span>
           <div>
@@ -854,10 +854,60 @@
           <!-- Capability 6: Sandbox CapabilitiesGuard & MCP -->
           <div class="bg-slate-950/60 p-4 rounded-xl border border-slate-800 space-y-2">
             <h4 class="font-bold text-teal-400 flex items-center gap-2">
-              <span>🛡️</span> Piaskownica Narzędzi & Wbudowany Serwer MCP
+              <span>🛡️</span> Piaskownica Narzędzi, Bubblewrap & MCP
             </h4>
             <p class="text-slate-400 leading-relaxed text-xs">
-              Trzy poziomy ochrony terminala bash: <em>Piaskownica (Restricted)</em> — twarda blokada ucieczek <code class="text-slate-300">..</code> i wrażliwych katalogów systemowych, <em>Pełna swoboda (Unrestricted)</em> oraz <em>Wyłączony</em>. Beherit udostępnia narzędzia agenta jako oficjalny serwer Model Context Protocol (<code class="text-teal-400">beherit mcp --agent-slug</code>).
+              Trzy poziomy ochrony terminala bash z utwardzoną izolacją Bubblewrap (<code class="text-teal-400">bwrap</code>: system w trybie read-only, prywatny /tmp i odizolowane procesy). Beherit udostępnia narzędzia agenta jako oficjalny serwer Model Context Protocol (<code class="text-teal-400">beherit mcp --agent-slug</code>).
+            </p>
+          </div>
+
+          <!-- Capability 7: Multi-Agent Swarm (v0.4.0) -->
+          <div class="bg-slate-950/60 p-4 rounded-xl border border-slate-800 space-y-2">
+            <h4 class="font-bold text-indigo-400 flex items-center gap-2">
+              <span>🐝</span> Wieloagentowy Rój (Multi-Agent Swarm)
+            </h4>
+            <p class="text-slate-400 leading-relaxed text-xs">
+              Narzędzie <code class="text-indigo-300 font-mono">call_agent(agent_slug, prompt)</code> pozwala agentom na autonomiczne zlecanie podzadań innym wyspecjalizowanym jednostkom. Wbudowany strażnik rekurencji (<code class="text-indigo-400">max_depth=3</code>) zapobiega zapętleniom, a interfejs wizualizuje drzewo delegacji w czasie rzeczywistym.
+            </p>
+          </div>
+
+          <!-- Capability 8: Persistent Memory & Goal Loop (v0.4.0) -->
+          <div class="bg-slate-950/60 p-4 rounded-xl border border-slate-800 space-y-2">
+            <h4 class="font-bold text-cyan-400 flex items-center gap-2">
+              <span>🧠</span> Pamięć Długoterminowa & Notatnik Celów
+            </h4>
+            <p class="text-slate-400 leading-relaxed text-xs">
+              Plik <code class="text-cyan-300 font-mono">memory.md</code> przechowuje zapamiętane fakty i preferencje użytkownika (<code class="text-xs">save_memory</code>, <code class="text-xs">recall_memory</code>), a plik <code class="text-cyan-300 font-mono">todo.md</code> umożliwia autonomiczną dekompozycję wieloetapowych celów z interaktywną tablicą Todo w UI.
+            </p>
+          </div>
+
+          <!-- Capability 9: Multimodal Vision & PDF (v0.4.0) -->
+          <div class="bg-slate-950/60 p-4 rounded-xl border border-slate-800 space-y-2">
+            <h4 class="font-bold text-rose-400 flex items-center gap-2">
+              <span>👁️</span> Multimodalny Czat i Analiza Wizyjna
+            </h4>
+            <p class="text-slate-400 leading-relaxed text-xs">
+              Bezpośrednie przesyłanie plików PNG, JPG, WEBP oraz PDF metodą drag-and-drop lub z selektora w oknie czatu. Automatyczna konwersja do Base64 i bezpośredni streaming wizyjny dla modeli Gemini, Claude i Antigravity SDK.
+            </p>
+          </div>
+
+          <!-- Capability 10: Graph RAG & Wikilinks (v0.4.0) -->
+          <div class="bg-slate-950/60 p-4 rounded-xl border border-slate-800 space-y-2">
+            <h4 class="font-bold text-amber-300 flex items-center gap-2">
+              <span>🕸️</span> Graph RAG i Wikilinki Obsidiana
+            </h4>
+            <p class="text-slate-400 leading-relaxed text-xs">
+              Automatyczne parsowanie linków wiki Obsidiana <code class="text-amber-200 font-mono">[[Dokument]]</code> w bazie wiedzy i zapis do tabeli grafu. Wieloskokowa eksploracja (1-hop i 2-hop) wstrzykuje do promptu powiązane konteksty, a UI oferuje interaktywny eksplorator relacji.
+            </p>
+          </div>
+
+          <!-- Capability 11: Plane Integration & Telegram Bot (v0.4.0) -->
+          <div class="bg-slate-950/60 p-4 rounded-xl border border-slate-800 space-y-2">
+            <h4 class="font-bold text-emerald-300 flex items-center gap-2">
+              <span>🤖</span> Integracja z Plane & Bot Telegram
+            </h4>
+            <p class="text-slate-400 leading-relaxed text-xs">
+              Zarządzanie zadaniami w Plane wprost przez agenta (<code class="text-xs font-mono">plane_create_issue</code>, <code class="text-xs font-mono">plane_update_state</code>) oraz wbudowany bot Telegram (long-polling w cyklu życia aplikacji, bezpieczny streaming i komendy mobilne).
             </p>
           </div>
         </div>
@@ -922,6 +972,10 @@
                 <tr>
                   <td class="px-3 py-2.5 font-bold text-slate-200">Przycisk 🔑 Klucz</td>
                   <td class="px-3 py-2.5 text-slate-400">Otwiera okno autoryzacji: 1-kliknięcie importu sesji z serwera, pole wklejenia klucza API oraz przycisk natychmiastowego testu połączenia.</td>
+                </tr>
+                <tr>
+                  <td class="px-3 py-2.5 font-bold text-slate-200">Przycisk ⚡ Skills</td>
+                  <td class="px-3 py-2.5 text-slate-400">Otwiera menedżer umiejętności agenta (<code class="text-xs">skills/</code>): przegląd, tworzenie i testowe uruchamianie skryptów Bash (.sh), Python (.py) oraz instrukcji Markdown (.md).</td>
                 </tr>
                 <tr>
                   <td class="px-3 py-2.5 font-bold text-rose-400">Przycisk 🗑️ Usuń</td>
@@ -1026,6 +1080,22 @@
               <span class="font-bold text-slate-200">Przycisk 📄 Raport w Tabeli Historii:</span>
               <p class="text-slate-400">Otwiera okno renderujące sformatowaną treść zapisanego raportu Markdown wraz z nagłówkami, tabelami, wykresami i pobranymi artefaktami.</p>
             </div>
+            <div class="bg-slate-950/60 p-3.5 rounded-xl border border-slate-800 space-y-1">
+              <span class="font-bold text-rose-400">Załączniki Multimodalne (v0.4.0):</span>
+              <p class="text-slate-400">Przycisk spinacza oraz strefa drag-and-drop w polu wprowadzania wiadomości. Umożliwia dodawanie obrazów PNG/JPG/WEBP oraz plików PDF do analizy wizyjnej na żywo.</p>
+            </div>
+            <div class="bg-slate-950/60 p-3.5 rounded-xl border border-slate-800 space-y-1">
+              <span class="font-bold text-cyan-400">Pamięć Trwała & Todo (v0.4.0):</span>
+              <p class="text-slate-400">Dedykowane zakładki podglądu i edycji pamięci (<code class="text-xs">memory.md</code>) oraz autonomicznego planera etapów celów (<code class="text-xs">todo.md</code>) z synchronizacją z SQLite.</p>
+            </div>
+            <div class="bg-slate-950/60 p-3.5 rounded-xl border border-slate-800 space-y-1">
+              <span class="font-bold text-amber-400">Eksplorator Grafu Wiedzy (v0.4.0):</span>
+              <p class="text-slate-400">Zakładka w oknie Bazy Wiedzy wizualizująca relacje i powiązania między notatkami Obsidiana wyekstrahowane z wikilinków <code class="text-xs font-mono">[[...]]</code>.</p>
+            </div>
+            <div class="bg-slate-950/60 p-3.5 rounded-xl border border-slate-800 space-y-1">
+              <span class="font-bold text-emerald-400">Centrum Bota Telegram (v0.4.0):</span>
+              <p class="text-slate-400">Przycisk w pasku nawigacji pozwalający monitorować stan asynchronicznej usługi bota Telegram, połączonych użytkowników oraz wysłać testowe powiadomienie push.</p>
+            </div>
           </div>
         </div>
       </div>
@@ -1098,7 +1168,7 @@
           <!-- cURL Example -->
           <div class="space-y-1.5 pt-2">
             <span class="font-bold text-xs text-slate-200">Przykładowe polecenie cURL do uruchomienia agenta:</span>
-            <pre class="bg-slate-950 p-3 rounded-xl border border-slate-800 text-[11px] font-mono text-emerald-300 overflow-x-auto custom-scroll"><code>curl -X POST "http://100.121.196.113:8650/api/agents/analityk-rynkow/run" \
+            <pre class="bg-slate-950 p-3 rounded-xl border border-slate-800 text-[11px] font-mono text-emerald-300 overflow-x-auto custom-scroll"><code>curl -X POST "http://localhost:8650/api/agents/analityk-rynkow/run" \
      -H "Content-Type: application/json" \
      -d '{
        "prompt": "Przeanalizuj dzisiejszy raport sprzedaży",
@@ -1112,20 +1182,65 @@
       </div>
 
       <!-- CHAPTER 6: MCP SERVERS & SANDBOX -->
-      <div x-show="(guideActiveChapter === 'all' || guideActiveChapter === 'mcp') && guideMatches('klocki mcp serwer piaskownica sandbox uprawnienia terminal brave postgres sqlite filesystem github puppeteer')" class="bg-slate-900 border border-slate-800 rounded-2xl p-5 sm:p-6 space-y-5 shadow-sm">
+      <div x-show="(guideActiveChapter === 'all' || guideActiveChapter === 'mcp') && guideMatches('klocki mcp serwer piaskownica sandbox uprawnienia terminal brave postgres sqlite filesystem github puppeteer bubblewrap bwrap narzędzia call_agent memory todo plane skills telegram')" class="bg-slate-900 border border-slate-800 rounded-2xl p-5 sm:p-6 space-y-5 shadow-sm">
         <div class="flex items-center gap-2.5 pb-3 border-b border-slate-800">
           <span class="text-xl">🧩</span>
           <div>
-            <h3 class="text-lg font-bold text-slate-100">6. Narzędzia MCP i Piaskownica Uprawnień (Sandbox)</h3>
-            <p class="text-xs text-slate-400">Model Context Protocol, integracja zewnętrznych serwerów narzędzi i ochrona systemu.</p>
+            <h3 class="text-lg font-bold text-slate-100">6. Narzędzia MCP, Wbudowany Zestaw Narzędzi i Piaskownica Bubblewrap</h3>
+            <p class="text-xs text-slate-400">Model Context Protocol, wbudowane narzędzia autonomii (v0.4.0) oraz izolacja Bubblewrap.</p>
           </div>
         </div>
 
         <div class="space-y-3 text-xs sm:text-sm text-slate-300 leading-relaxed">
           <p>
-            Beherit wspiera oficjalny standard **Model Context Protocol (MCP)** stworzony przez Anthropic. Agent może nie tylko korzystać z zewnętrznych serwerów MCP, ale sam Beherit udostępnia wbudowany serwer narzędzi piaskownicy:
+            Beherit wspiera oficjalny standard **Model Context Protocol (MCP)**. Agent może nie tylko korzystać z zewnętrznych serwerów MCP, ale sam Beherit udostępnia wbudowany serwer narzędzi piaskownicy:
           </p>
           <pre class="bg-slate-950 p-3 rounded-xl border border-slate-800 text-[11px] font-mono text-teal-300"><code>beherit mcp --agent-slug analityk-rynkow</code></pre>
+
+          <!-- Built-in Tools Table (v0.4.0) -->
+          <div class="space-y-2 pt-2">
+            <span class="font-bold text-xs text-slate-200">🛠️ Wbudowane narzędzia autonomii agenta (v0.4.0):</span>
+            <div class="overflow-x-auto">
+              <table class="w-full text-left text-xs text-slate-300 border border-slate-800 rounded-xl overflow-hidden">
+                <thead class="bg-slate-950/80 text-slate-400 border-b border-slate-800">
+                  <tr>
+                    <th class="px-3 py-2 w-52 font-mono">Narzędzie</th>
+                    <th class="px-3 py-2">Przeznaczenie i działanie</th>
+                  </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-800/60 bg-slate-950/40 text-[11px]">
+                  <tr>
+                    <td class="px-3 py-2 font-mono text-indigo-400">call_agent(slug, prompt)</td>
+                    <td class="px-3 py-2 text-slate-300">Delegowanie podzadania do innego agenta w systemie (Swarm z limitem głębokości 3).</td>
+                  </tr>
+                  <tr>
+                    <td class="px-3 py-2 font-mono text-cyan-400">save_memory / recall_memory</td>
+                    <td class="px-3 py-2 text-slate-300">Zapisywanie i odczyt faktów długoterminowych z pliku <code class="text-xs">memory.md</code> agenta.</td>
+                  </tr>
+                  <tr>
+                    <td class="px-3 py-2 font-mono text-amber-400">manage_todo(action, ...)</td>
+                    <td class="px-3 py-2 text-slate-300">Dekompozycja i aktualizacja etapów celów w scratchpadzie <code class="text-xs">todo.md</code>.</td>
+                  </tr>
+                  <tr>
+                    <td class="px-3 py-2 font-mono text-emerald-400">plane_create_issue / plane_update_state</td>
+                    <td class="px-3 py-2 text-slate-300">Dwukierunkowa integracja z Plane: pobieranie, zakładanie i zmiana statusów zadań.</td>
+                  </tr>
+                  <tr>
+                    <td class="px-3 py-2 font-mono text-purple-400">list_skills / run_skill</td>
+                    <td class="px-3 py-2 text-slate-300">Dynamiczne wykonywanie skryptów powłoki lub Pythona z katalogu <code class="text-xs">skills/</code> agenta.</td>
+                  </tr>
+                  <tr>
+                    <td class="px-3 py-2 font-mono text-sky-400">query_knowledge_graph</td>
+                    <td class="px-3 py-2 text-slate-300">Eksploracja grafu bazy wiedzy opartego o wikilinki Obsidiana <code class="text-xs">[[...]]</code> (1 i 2 skoki).</td>
+                  </tr>
+                  <tr>
+                    <td class="px-3 py-2 font-mono text-rose-400">send_telegram_notification</td>
+                    <td class="px-3 py-2 text-slate-300">Bezpośrednie wysyłanie alertów i podsumowań na telefon użytkownika przez bota Telegram.</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
 
           <div class="grid grid-cols-1 md:grid-cols-2 gap-3 pt-2 text-xs">
             <div class="bg-slate-950/60 p-3.5 rounded-xl border border-slate-800 space-y-1">
@@ -1143,6 +1258,10 @@
             <div class="bg-slate-950/60 p-3.5 rounded-xl border border-slate-800 space-y-1">
               <span class="font-bold text-purple-400">🐙 GitHub & Puppeteer MCP:</span>
               <p class="text-slate-400">Pozwala na integrację z repozytoriami GitHub (PR, Issue) oraz rendering stron internetowych przez bezgłową przeglądarkę Chromium.</p>
+            </div>
+            <div class="bg-slate-950/60 p-3.5 rounded-xl border border-slate-800 space-y-1 md:col-span-2">
+              <span class="font-bold text-teal-400">🛡️ Utwardzona Izolacja Bubblewrap (v0.4.0):</span>
+              <p class="text-slate-400">Polecenia powłoki bash w trybie <code class="text-teal-300">restricted</code> są uruchamiane w odizolowanym kontenerze Bubblewrap (<code class="text-teal-300">bwrap</code>) z montowaniem systemu w trybie tylko do odczytu, prywatnym systemem pamięci /tmp oraz unsharingiem PID/IPC/UTS, gwarantując pełne bezpieczeństwo hosta.</p>
             </div>
           </div>
         </div>
@@ -1218,6 +1337,21 @@
                   <td class="px-3 py-2 text-sky-400 font-bold">GET</td>
                   <td class="px-3 py-2 text-slate-200">/api/reports/artifact</td>
                   <td class="px-3 py-2 font-sans text-xs text-slate-400">Bezpieczny streaming wygenerowanych obrazów, filmów i plików.</td>
+                </tr>
+                <tr>
+                  <td class="px-3 py-2 text-sky-400 font-bold">GET/POST</td>
+                  <td class="px-3 py-2 text-slate-200">/api/agents/{slug}/skills</td>
+                  <td class="px-3 py-2 font-sans text-xs text-slate-400">Listowanie oraz tworzenie skryptów w katalogu skills/ agenta.</td>
+                </tr>
+                <tr>
+                  <td class="px-3 py-2 text-sky-400 font-bold">GET</td>
+                  <td class="px-3 py-2 text-slate-200">/api/agents/{slug}/knowledge/graph</td>
+                  <td class="px-3 py-2 font-sans text-xs text-slate-400">Zwraca węzły i krawędzie grafu wikilinków Obsidiana dla RAG.</td>
+                </tr>
+                <tr>
+                  <td class="px-3 py-2 text-sky-400 font-bold">GET/POST</td>
+                  <td class="px-3 py-2 text-slate-200">/api/telegram/status /send</td>
+                  <td class="px-3 py-2 font-sans text-xs text-slate-400">Status bota Telegram oraz endpoint wysyłania alertów push.</td>
                 </tr>
               </tbody>
             </table>
