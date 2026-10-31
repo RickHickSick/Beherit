@@ -197,6 +197,17 @@ class DatabaseManager:
             conn.commit()
             return cursor.rowcount > 0
 
+    def update_chat_session_title(self, session_id: str, title: str) -> bool:
+        """Update the title of a chat session."""
+        now = time.time()
+        with self._get_connection() as conn:
+            cursor = conn.execute(
+                "UPDATE chat_sessions SET title = ?, updated_at = ? WHERE id = ?",
+                (title, now, session_id),
+            )
+            conn.commit()
+            return cursor.rowcount > 0
+
     def delete_agent_data(self, agent_slug: str) -> None:
         """Clean up all job history, chat sessions, and messages for an agent."""
         with self._get_connection() as conn:

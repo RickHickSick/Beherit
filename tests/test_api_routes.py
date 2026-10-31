@@ -119,6 +119,25 @@ def test_chat_sessions_crud_and_persistence(tmp_path: Path, monkeypatch):
     assert len(messages) >= 1
     assert any(m["role"] == "user" and m["content"] == "First message" for m in messages)
 
+    # 4b. Update session title (BEH-051)
+    patch_resp = client.patch(
+        f"/api/agents/chat-bot/chats/{sid}",
+        json={"title": "Updated Session Title"},
+    )
+    assert patch_resp.status_code == 200
+    assert patch_resp.json()["title"] == "Updated Session Title"
+
+    # Verify updated title in list
+    list_sess_after = client.get("/api/agents/chat-bot/chats")
+    assert list_sess_after.json()["sessions"][0]["title"] == "Updated Session Title"
+
+    # Verify 404 on non-existent session
+    patch_404 = client.patch(
+        "/api/agents/chat-bot/chats/non_existent_sid",
+        json={"title": "Should Fail"},
+    )
+    assert patch_404.status_code == 404
+
     # 5. Delete session
     del_resp = client.delete(f"/api/agents/chat-bot/chats/{sid}")
     assert del_resp.status_code == 200

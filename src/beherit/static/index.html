@@ -329,15 +329,36 @@
         </div>
 
         <div class="flex items-center gap-2">
-          <!-- Session Selector -->
+          <!-- Session Selector & Controls (BEH-051) -->
           <div class="flex items-center gap-1.5 bg-slate-800 px-2.5 py-1.5 rounded-lg border border-slate-700">
             <span class="text-[11px] text-slate-400">Wątek:</span>
-            <select x-model="activeSessionId" @change="loadSessionMessages(activeSessionId)" class="bg-transparent text-emerald-400 font-medium text-xs outline-none max-w-[120px] sm:max-w-[180px] truncate cursor-pointer">
+            <select x-model="activeSessionId" @change="loadSessionMessages(activeSessionId)" class="bg-transparent text-emerald-400 font-medium text-xs outline-none max-w-[110px] sm:max-w-[170px] truncate cursor-pointer">
               <option value="" class="bg-slate-900 text-slate-200">＋ Nowa rozmowa</option>
               <template x-for="sess in agentSessions" :key="sess.id">
                 <option :value="sess.id" class="bg-slate-900 text-slate-200" x-text="sess.title || sess.id"></option>
               </template>
             </select>
+
+            <!-- Action: New Named Session -->
+            <button @click="openNewSessionModal()" title="Utwórz nowy nazwany wątek" class="p-1 text-slate-400 hover:text-emerald-400 hover:bg-slate-700/60 rounded transition">
+              <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
+              </svg>
+            </button>
+
+            <!-- Action: Rename Session (only when session is active) -->
+            <button x-show="activeSessionId" @click="openRenameSessionModal()" title="Zmień tytuł rozmowy" class="p-1 text-slate-400 hover:text-amber-400 hover:bg-slate-700/60 rounded transition" style="display: none;">
+              <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+              </svg>
+            </button>
+
+            <!-- Action: Delete Session (only when session is active) -->
+            <button x-show="activeSessionId" @click="confirmDeleteActiveSession()" title="Usuń tę rozmowę" class="p-1 text-slate-400 hover:text-rose-400 hover:bg-slate-700/60 rounded transition" style="display: none;">
+              <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+              </svg>
+            </button>
           </div>
 
           <!-- Agent Selector -->
@@ -2180,6 +2201,32 @@
     </div>
   </div>
 
+  <!-- MODAL: SESSION TITLE / NEW SESSION (BEH-051) -->
+  <div x-show="openSessionModal" class="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4" style="display: none;">
+    <div @click.away="openSessionModal = false" class="bg-slate-900 border border-slate-800 w-full max-w-md rounded-2xl p-6 shadow-2xl space-y-4">
+      <div class="flex items-center justify-between border-b border-slate-800 pb-3">
+        <div>
+          <h3 class="text-base font-bold text-slate-100 flex items-center gap-2">
+            <span x-text="sessionModalMode === 'create' ? '💬' : '✏️'"></span>
+            <span x-text="sessionModalMode === 'create' ? 'Nowa Nazwana Rozmowa' : 'Zmień Tytuł Rozmowy'"></span>
+          </h3>
+          <p class="text-xs text-slate-400" x-text="sessionModalMode === 'create' ? 'Nadaj tytuł nowemu wątkowi przed rozpoczęciem czatu.' : 'Wprowadź nowy tytuł dla bieżącej rozmowy.'"></p>
+        </div>
+        <button @click="openSessionModal = false" class="text-slate-400 hover:text-slate-200">✕</button>
+      </div>
+      <div>
+        <label class="block text-xs font-semibold text-slate-300 mb-1">Tytuł Rozmowy:</label>
+        <input type="text" x-model="sessionModalTitle" @keydown.enter="submitSessionModal()" placeholder="np. Analiza logów serwera, Audyt bezpieczeństwa..." class="w-full bg-slate-800 text-slate-100 px-3 py-2 rounded-xl border border-slate-700 outline-none text-xs focus:border-emerald-400">
+      </div>
+      <div class="pt-2 border-t border-slate-800 flex justify-end gap-2">
+        <button @click="openSessionModal = false" class="px-4 py-2 rounded-xl text-slate-400 hover:text-slate-200 text-xs">Anuluj</button>
+        <button @click="submitSessionModal()" :disabled="!sessionModalTitle.trim()" class="bg-emerald-500 hover:bg-emerald-400 disabled:opacity-50 text-slate-950 font-bold px-5 py-2 rounded-xl text-xs transition">
+          <span x-text="sessionModalMode === 'create' ? 'Utwórz Wątek' : 'Zapisz Tytuł'"></span>
+        </button>
+      </div>
+    </div>
+  </div>
+
   <script>
     function beheritApp() {
       return {
@@ -2284,12 +2331,15 @@
           }
         ],
         
-        // Chat
+        // Chat (BEH-051)
         activeSessionId: '',
         agentSessions: [],
         chatMessages: [],
         chatInput: '',
         isStreaming: false,
+        openSessionModal: false,
+        sessionModalMode: 'edit',
+        sessionModalTitle: '',
 
         // Engine model presets
         engineModelOptions: {
@@ -2575,6 +2625,111 @@
             }
           } catch (e) {
             console.error(e);
+          }
+        },
+
+        openNewSessionModal() {
+          if (!this.activeAgent) {
+            this.showToast('Najpierw wybierz agenta');
+            return;
+          }
+          this.haptic();
+          this.sessionModalMode = 'create';
+          this.sessionModalTitle = '';
+          this.openSessionModal = true;
+        },
+
+        openRenameSessionModal() {
+          if (!this.activeAgent || !this.activeSessionId) return;
+          this.haptic();
+          const current = this.agentSessions.find(s => s.id === this.activeSessionId);
+          this.sessionModalMode = 'edit';
+          this.sessionModalTitle = current ? (current.title || '') : '';
+          this.openSessionModal = true;
+        },
+
+        async submitSessionModal() {
+          const title = this.sessionModalTitle.trim();
+          if (!title || !this.activeAgent) return;
+          this.haptic();
+
+          if (this.sessionModalMode === 'create') {
+            try {
+              const res = await this.apiFetch(`/api/agents/${this.activeAgent.slug}/chats`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ title: title })
+              });
+              if (res.ok) {
+                const data = await res.json();
+                this.openSessionModal = false;
+                this.showToast(`Utworzono wątek: ${title}`);
+                await this.loadAgentSessions(this.activeAgent.slug);
+                if (data.session_id) {
+                  this.activeSessionId = data.session_id;
+                  await this.loadSessionMessages(this.activeSessionId);
+                }
+              } else {
+                this.showToast('Błąd podczas tworzenia wątku');
+              }
+            } catch (e) {
+              console.error(e);
+              this.showToast('Błąd połączenia z serwerem');
+            }
+          } else {
+            // Edit mode (PATCH /api/agents/{slug}/chats/{sessionId})
+            try {
+              const res = await this.apiFetch(`/api/agents/${this.activeAgent.slug}/chats/${this.activeSessionId}`, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ title: title })
+              });
+              if (res.ok) {
+                this.openSessionModal = false;
+                const match = this.agentSessions.find(s => s.id === this.activeSessionId);
+                if (match) match.title = title;
+                this.showToast('Zaktualizowano tytuł rozmowy');
+              } else {
+                this.showToast('Błąd podczas zmiany tytułu');
+              }
+            } catch (e) {
+              console.error(e);
+              this.showToast('Błąd połączenia z serwerem');
+            }
+          }
+        },
+
+        async confirmDeleteActiveSession() {
+          if (!this.activeAgent || !this.activeSessionId) return;
+          const current = this.agentSessions.find(s => s.id === this.activeSessionId);
+          const title = current ? (current.title || current.id) : this.activeSessionId;
+
+          if (!confirm(`Czy na pewno chcesz usunąć tę rozmowę: "${title}"?\nWszystkie wiadomości z tego wątku zostaną trwale usunięte.`)) {
+            return;
+          }
+          this.haptic();
+
+          try {
+            const res = await this.apiFetch(`/api/agents/${this.activeAgent.slug}/chats/${this.activeSessionId}`, {
+              method: 'DELETE'
+            });
+            if (res.ok) {
+              this.showToast('Rozmowa została usunięta');
+              const deletedId = this.activeSessionId;
+              this.agentSessions = this.agentSessions.filter(s => s.id !== deletedId);
+              if (this.agentSessions.length > 0) {
+                this.activeSessionId = this.agentSessions[0].id;
+                await this.loadSessionMessages(this.activeSessionId);
+              } else {
+                this.activeSessionId = '';
+                this.chatMessages = [];
+              }
+            } else {
+              this.showToast('Błąd podczas usuwania rozmowy');
+            }
+          } catch (e) {
+            console.error(e);
+            this.showToast('Błąd połączenia z serwerem');
           }
         },
 

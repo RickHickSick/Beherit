@@ -231,6 +231,10 @@ class CreateChatSessionRequest(BaseModel):
     title: str | None = Field(default=None, description="Optional chat session title")
 
 
+class UpdateChatSessionRequest(BaseModel):
+    title: str = Field(..., min_length=1, max_length=200, description="New chat session title")
+
+
 class ExecuteToolRequest(BaseModel):
     tool: str = Field(..., description="Tool name: execute_bash, read_file, write_file, list_dir")
     args: dict[str, Any] = Field(default_factory=dict)
@@ -1115,6 +1119,21 @@ async def get_agent_chat_messages(slug: str, session_id: str):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Agent not found.")
     messages = db_mgr.get_session_messages(session_id)
     return {"session_id": session_id, "messages": messages}
+
+
+@router.patch("/{slug}/chats/{session_id}")
+async def update_agent_chat_session(slug: str, session_id: str, payload: UpdateChatSessionRequest):
+    """Update title of a chat session."""
+    agent = repo.load_agent(slug)
+    if not agent:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Agent not found.")
+    clean_title = payload.title.strip()
+    if not clean_title:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Title cannot be empty.")
+    updated = db_mgr.update_chat_session_title(session_id, clean_title)
+    if not updated:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Chat session not found.")
+    return {"status": "updated", "session_id": session_id, "title": clean_title}
 
 
 @router.delete("/{slug}/chats/{session_id}")
