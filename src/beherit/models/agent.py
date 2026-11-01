@@ -120,6 +120,7 @@ class AgentModel(BaseModel):
     # Subagents & Swarm Hierarchy (BEH-060)
     parent_agent: str | None = Field(default=None, description="Slug of parent agent if this is a subagent")
     subagents: list[str] = Field(default_factory=list, description="List of subagent slugs directly managed by this agent")
+    folder: str | None = Field(default=None, description="Folder or team category for organizing agents (e.g. 'Finanse', 'DevOps')")
 
     # Metadata fields for runtime observation
     file_path: str | None = Field(default=None, description="Absolute path on disk to agent.md")

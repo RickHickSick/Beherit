@@ -66,6 +66,7 @@ class CreateAgentRequest(BaseModel):
     import_local_auth: bool = Field(default=False, description="Automatically import local host CLI session")
     parent_agent: str | None = Field(default=None, description="Slug of parent agent if this is a subagent")
     subagents: list[str] = Field(default_factory=list, description="List of subagent slugs directly managed by this agent")
+    folder: str | None = Field(default=None, description="Folder or team category to place this agent into")
 
 
 class UpdateAgentRequest(BaseModel):
@@ -80,6 +81,7 @@ class UpdateAgentRequest(BaseModel):
     mcp_servers: dict[str, MCPServerConfig] | None = None
     parent_agent: str | None = None
     subagents: list[str] | None = None
+    folder: str | None = None
 
 
 class CreateSubagentRequest(BaseModel):
@@ -93,6 +95,17 @@ class CreateSubagentRequest(BaseModel):
     capabilities: AgentCapabilities | None = None
     inherit_auth: bool = Field(default=True, description="Inherit parent agent credentials")
     auth_token: str | None = Field(default=None)
+    folder: str | None = None
+
+
+class MoveAgentFolderRequest(BaseModel):
+    folder: str | None = None
+    move_subagents: bool = True
+
+
+class RenameFolderRequest(BaseModel):
+    old_name: str = Field(..., min_length=1)
+    new_name: str | None = Field(default=None)
 
 
 class SaveKnowledgeRequest(BaseModel):
@@ -337,6 +350,7 @@ async def create_agent(payload: CreateAgentRequest):
         mcp_servers=payload.mcp_servers or {},
         parent_agent=payload.parent_agent,
         subagents=payload.subagents or [],
+        folder=payload.folder.strip() if (payload.folder and payload.folder.strip()) else None,
     )
 
     target_dir = Path(payload.custom_target_dir) if payload.custom_target_dir else None
@@ -541,6 +555,8 @@ async def update_agent(slug: str, payload: UpdateAgentRequest):
         agent.parent_agent = payload.parent_agent
     if payload.subagents is not None:
         agent.subagents = payload.subagents
+    if payload.folder is not None:
+        agent.folder = payload.folder.strip() if payload.folder.strip() else None
 
     repo.save_agent(agent)
     scheduler.sync_all_jobs()
@@ -602,6 +618,7 @@ async def create_subagent_endpoint(slug: str, payload: CreateSubagentRequest):
         instructions=payload.instructions or f"Jesteś dedykowanym podagentem dla {parent.name}.",
         capabilities=capabilities,
         parent_agent=slug,
+        folder=payload.folder or parent.folder,
     )
     repo.save_agent(subagent)
 
@@ -648,6 +665,78 @@ async def unlink_subagent_endpoint(slug: str, sub_slug: str):
         repo.save_agent(sub)
 
     return {"status": "unlinked", "parent_slug": slug, "subagent_slug": sub_slug}
+
+
+# --- Agent Folders and Team Swarm Management ---
+
+
+@router.get("/folders/list")
+async def list_folders():
+    """List all unique folders and their agent counts."""
+    all_agents = repo.list_agents()
+    folder_counts: dict[str, int] = {}
+    unassigned_count = 0
+
+    for a in all_agents:
+        if a.folder and a.folder.strip():
+            f_name = a.folder.strip()
+            folder_counts[f_name] = folder_counts.get(f_name, 0) + 1
+        else:
+            unassigned_count += 1
+
+    folders = [
+        {"name": name, "count": count}
+        for name, count in sorted(folder_counts.items(), key=lambda x: x[0].lower())
+    ]
+    return {
+        "folders": folders,
+        "unassigned_count": unassigned_count,
+        "total_agents": len(all_agents),
+    }
+
+
+@router.patch("/{slug}/folder")
+async def move_agent_folder(slug: str, payload: MoveAgentFolderRequest):
+    """Move an agent (and optionally its subagents) to a new folder/team."""
+    agent = repo.load_agent(slug)
+    if not agent:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Agent not found.")
+
+    new_folder = payload.folder.strip() if (payload.folder and payload.folder.strip()) else None
+    agent.folder = new_folder
+    repo.save_agent(agent)
+
+    # Optionally move linked subagents to the same folder
+    affected_subagents = []
+    if payload.move_subagents and agent.subagents:
+        for sub_slug in agent.subagents:
+            sub = repo.load_agent(sub_slug)
+            if sub and sub.parent_agent == slug:
+                sub.folder = new_folder
+                repo.save_agent(sub)
+                affected_subagents.append(sub_slug)
+
+    return {
+        "status": "moved",
+        "slug": slug,
+        "folder": new_folder,
+        "affected_subagents": affected_subagents,
+        "agent": repo.load_agent(slug).model_dump(mode="json"),
+    }
+
+
+@router.post("/folders/rename")
+async def rename_folder(payload: RenameFolderRequest):
+    """Rename a folder across all agents assigned to it."""
+    old_name = payload.old_name.strip()
+    new_name = payload.new_name.strip() if (payload.new_name and payload.new_name.strip()) else None
+    updated = 0
+    for a in repo.list_agents():
+        if a.folder and a.folder.strip() == old_name:
+            a.folder = new_name
+            repo.save_agent(a)
+            updated += 1
+    return {"status": "renamed", "old_name": old_name, "new_name": new_name, "updated_count": updated}
 
 
 # --- Per-Agent Authentication Endpoints ---

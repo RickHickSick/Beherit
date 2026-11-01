@@ -178,11 +178,148 @@
         </div>
       </div>
 
-      <!-- Agents Grid -->
-      <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        <template x-for="agent in agents" :key="agent.slug">
-          <div class="bg-slate-900 border border-slate-800 hover:border-slate-700 rounded-2xl p-5 flex flex-col justify-between transition group shadow-sm hover:shadow-emerald-950/20">
+      <!-- FOLDER & TEAM NAVIGATION BAR (BEH-062) -->
+      <div class="bg-slate-900/60 p-3 sm:p-4 rounded-2xl border border-slate-800 space-y-3">
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <!-- Folder tabs with Drag & Drop Drop Targets -->
+          <div class="flex items-center gap-1.5 overflow-x-auto custom-scroll pb-1 sm:pb-0 text-xs">
+            <!-- All Folders Tab -->
+            <button @click="activeFolderFilter = 'all'; haptic();"
+                    :class="activeFolderFilter === 'all' ? 'bg-emerald-600 text-slate-950 font-bold shadow-md shadow-emerald-900/30' : 'bg-slate-800/80 hover:bg-slate-800 text-slate-300 border border-slate-700/60'"
+                    class="px-3 py-1.5 rounded-xl whitespace-nowrap transition flex items-center gap-1.5 shrink-0">
+              <span>🌐 Wszystkie</span>
+              <span class="text-[10px] px-1.5 py-0.5 rounded-full font-bold"
+                    :class="activeFolderFilter === 'all' ? 'bg-emerald-950 text-emerald-200' : 'bg-slate-900 text-slate-400'"
+                    x-text="agents.length"></span>
+            </button>
+
+            <!-- Dynamic Folder Tabs -->
+            <template x-for="f in availableFolders" :key="f">
+              <button @click="activeFolderFilter = f; haptic();"
+                      @dragover.prevent
+                      @dragenter.prevent="$event.currentTarget.classList.add('ring-2', 'ring-indigo-500', 'bg-indigo-950/60')"
+                      @dragleave.prevent="$event.currentTarget.classList.remove('ring-2', 'ring-indigo-500', 'bg-indigo-950/60')"
+                      @drop.prevent="$event.currentTarget.classList.remove('ring-2', 'ring-indigo-500', 'bg-indigo-950/60'); onDropAgentOnFolder(f, $event)"
+                      :class="activeFolderFilter === f ? 'bg-indigo-600 text-white font-bold shadow-md shadow-indigo-900/30' : 'bg-slate-800/80 hover:bg-slate-800 text-slate-300 border border-slate-700/60'"
+                      class="px-3 py-1.5 rounded-xl whitespace-nowrap transition flex items-center gap-1.5 shrink-0 group relative"
+                      :title="'Folder: ' + f + ' (Upuść agenta tutaj)'">
+                <span>📁</span>
+                <span x-text="f"></span>
+                <span class="text-[10px] px-1.5 py-0.5 rounded-full font-bold"
+                      :class="activeFolderFilter === f ? 'bg-indigo-950 text-indigo-200' : 'bg-slate-900 text-slate-400'"
+                      x-text="getAgentCountInFolder(f)"></span>
+                <span @click.stop="promptRenameFolder(f)" class="opacity-0 group-hover:opacity-100 hover:text-amber-300 ml-0.5 text-slate-400 transition" title="Zmień nazwę folderu">✏️</span>
+              </button>
+            </template>
+
+            <!-- Unassigned Tab -->
+            <button @click="activeFolderFilter = 'unassigned'; haptic();"
+                    @dragover.prevent
+                    @dragenter.prevent="$event.currentTarget.classList.add('ring-2', 'ring-amber-500', 'bg-amber-950/60')"
+                    @dragleave.prevent="$event.currentTarget.classList.remove('ring-2', 'ring-amber-500', 'bg-amber-950/60')"
+                    @drop.prevent="$event.currentTarget.classList.remove('ring-2', 'ring-amber-500', 'bg-amber-950/60'); onDropAgentOnFolder(null, $event)"
+                    :class="activeFolderFilter === 'unassigned' ? 'bg-amber-600 text-slate-950 font-bold shadow-md shadow-amber-900/30' : 'bg-slate-800/80 hover:bg-slate-800 text-slate-300 border border-slate-700/60'"
+                    class="px-3 py-1.5 rounded-xl whitespace-nowrap transition flex items-center gap-1.5 shrink-0"
+                    title="Agenci bez przypisanego folderu (Upuść, aby odpiąć folder)">
+              <span>📂 Bez folderu</span>
+              <span class="text-[10px] px-1.5 py-0.5 rounded-full font-bold"
+                    :class="activeFolderFilter === 'unassigned' ? 'bg-amber-950 text-amber-200' : 'bg-slate-900 text-slate-400'"
+                    x-text="getAgentCountInFolder(null)"></span>
+            </button>
+
+            <!-- Create Folder Button -->
+            <button @click="promptCreateNewFolder()"
+                    class="px-2.5 py-1.5 rounded-xl border border-dashed border-slate-700 hover:border-indigo-500 text-slate-400 hover:text-indigo-300 hover:bg-slate-800/80 transition flex items-center gap-1 shrink-0 whitespace-nowrap"
+                    title="Utwórz nowy folder / zespół">
+              <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
+              <span>Nowy Folder</span>
+            </button>
+          </div>
+
+          <!-- Controls: Search & View Switcher -->
+          <div class="flex items-center gap-2 shrink-0">
+            <!-- Search Filter -->
+            <div class="relative w-full sm:w-48">
+              <input type="text" x-model="agentSearchFilter" placeholder="Szukaj agenta..."
+                     class="w-full bg-slate-800/90 text-xs text-slate-200 pl-7 pr-3 py-1.5 rounded-xl border border-slate-700 outline-none focus:border-emerald-500">
+              <svg class="w-3.5 h-3.5 text-slate-400 absolute left-2 top-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
+            </div>
+
+            <!-- View Switcher (Grid vs Team Swarm) -->
+            <div class="flex items-center bg-slate-800 p-0.5 rounded-xl border border-slate-700/80 text-xs">
+              <button @click="dashboardViewMode = 'grid'; haptic();"
+                      :class="dashboardViewMode === 'grid' ? 'bg-slate-700 text-emerald-400 font-semibold shadow-sm' : 'text-slate-400 hover:text-slate-200'"
+                      class="px-2.5 py-1 rounded-lg transition flex items-center gap-1"
+                      title="Widok kafelkowy">
+                <span>⊞</span>
+                <span class="hidden md:inline">Kafelki</span>
+              </button>
+              <button @click="dashboardViewMode = 'swarm'; haptic();"
+                      :class="dashboardViewMode === 'swarm' ? 'bg-slate-700 text-indigo-400 font-semibold shadow-sm' : 'text-slate-400 hover:text-slate-200'"
+                      class="px-2.5 py-1 rounded-lg transition flex items-center gap-1"
+                      title="Widok zespołów i roju">
+                <span>🐝</span>
+                <span class="hidden md:inline">Zespoły i Rój</span>
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Hint and Counter Row -->
+        <div class="text-[11px] text-slate-400 flex items-center justify-between border-t border-slate-800/60 pt-2 px-1">
+          <div class="flex items-center gap-1.5">
+            <span class="text-indigo-400">💡</span>
+            <span>Przeciągnij kafelek agenta i upuść na zakładkę folderu, aby go błyskawicznie przenieść do wybranego zespołu.</span>
+          </div>
+          <span class="text-slate-400 font-mono text-[10px]" x-text="`Wyświetlono: ${filteredAgents.length} z ${agents.length}`"></span>
+        </div>
+      </div>
+
+      <!-- VIEW MODE A: AGENTS GRID (KAFELKI) -->
+      <div x-show="dashboardViewMode === 'grid'" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        <!-- Empty State -->
+        <div x-show="filteredAgents.length === 0" class="col-span-full py-12 text-center text-slate-400 bg-slate-900/30 rounded-2xl border border-dashed border-slate-800">
+          <div class="text-3xl mb-2">📁</div>
+          <p class="font-semibold text-slate-300">Brak agentów w tym widoku</p>
+          <p class="text-xs text-slate-400 mt-1">Przeciągnij agentów do tego folderu lub zmień filtr folderu.</p>
+        </div>
+
+        <template x-for="agent in filteredAgents" :key="agent.slug">
+          <div draggable="true"
+               @dragstart="onDragAgentStart($event, agent)"
+               class="bg-slate-900 border border-slate-800 hover:border-slate-700 rounded-2xl p-5 flex flex-col justify-between transition group shadow-sm hover:shadow-emerald-950/20 cursor-grab active:cursor-grabbing">
             <div>
+              <!-- Folder / Swarm Header Tag -->
+              <div class="flex items-center justify-between mb-3 pb-2 border-b border-slate-800/60">
+                <div class="flex items-center gap-1.5 flex-wrap">
+                  <template x-if="agent.folder">
+                    <button @click.stop="activeFolderFilter = agent.folder; haptic();" class="text-[11px] font-medium bg-indigo-500/15 hover:bg-indigo-500/25 text-indigo-300 border border-indigo-500/30 px-2 py-0.5 rounded-lg flex items-center gap-1 transition" title="Filtruj wg tego folderu">
+                      <span>📁</span>
+                      <span x-text="agent.folder"></span>
+                    </button>
+                  </template>
+                  <template x-if="!agent.folder">
+                    <button @click.stop="openMoveFolderModalFor(agent)" class="text-[11px] font-medium text-slate-500 hover:text-slate-300 hover:bg-slate-800/80 border border-dashed border-slate-700/60 px-2 py-0.5 rounded-lg flex items-center gap-1 transition" title="Przypisz do folderu">
+                      <span>📁</span>
+                      <span>+ Folder</span>
+                    </button>
+                  </template>
+                  <template x-if="agent.subagents && agent.subagents.length > 0">
+                    <span class="text-[10px] bg-purple-500/15 text-purple-300 border border-purple-500/30 px-1.5 py-0.5 rounded-md font-semibold flex items-center gap-1">
+                      👑 Koordynator (<span x-text="agent.subagents.length"></span>)
+                    </span>
+                  </template>
+                  <template x-if="agent.parent_agent">
+                    <span class="text-[10px] bg-slate-800 text-indigo-300 border border-slate-700 px-1.5 py-0.5 rounded-md font-medium flex items-center gap-1">
+                      ↳ Podagent
+                    </span>
+                  </template>
+                </div>
+                <button @click.stop="openMoveFolderModalFor(agent)" class="text-slate-400 hover:text-indigo-300 p-1 rounded hover:bg-slate-800 transition" title="Zmień folder / zespół">
+                  <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"></path></svg>
+                </button>
+              </div>
+
               <!-- Header info -->
               <div class="flex items-start justify-between gap-2 mb-3">
                 <div class="flex items-center gap-3">
@@ -295,9 +432,9 @@
                 </button>
               </div>
 
-              <!-- Secondary Row: Knowledge, Webhook/n8n, Edit & Delete -->
+              <!-- Secondary Row: Knowledge, Skills, n8n, Subagents, Move Folder, Edit & Delete -->
               <div class="flex items-center justify-between text-xs pt-1 border-t border-slate-800/40">
-                <div class="flex items-center gap-2">
+                <div class="flex items-center gap-2 flex-wrap">
                   <button @click="openKnowledgeModalFor(agent)" class="text-slate-400 hover:text-emerald-400 px-1 py-1 rounded transition flex items-center gap-1">
                     📚 Baza wiedzy
                   </button>
@@ -310,6 +447,9 @@
                   <button @click="openSubagentsModalFor(agent)" class="text-slate-400 hover:text-indigo-400 px-1 py-1 rounded transition flex items-center gap-1" title="Zarządzanie Podagentami">
                     👥 Podagenci
                   </button>
+                  <button @click="openMoveFolderModalFor(agent)" class="text-slate-400 hover:text-indigo-300 px-1 py-1 rounded transition flex items-center gap-1" title="Przenieś do folderu / zespołu">
+                    📁 Folder
+                  </button>
                 </div>
                 <div class="flex items-center gap-2">
                   <button @click="openEditModalFor(agent)" class="text-slate-400 hover:text-slate-200 px-1 py-1 rounded transition flex items-center gap-1">
@@ -320,6 +460,139 @@
                   </button>
                 </div>
               </div>
+            </div>
+          </div>
+        </template>
+      </div>
+
+      <!-- VIEW MODE B: SWARM / TEAM GROUPED VIEW (BEH-062) -->
+      <div x-show="dashboardViewMode === 'swarm'" class="space-y-6">
+        <template x-for="group in agentsGroupedByFolder" :key="group.name">
+          <div class="bg-slate-900/70 border border-slate-800 rounded-2xl p-5 shadow-lg space-y-4">
+            <!-- Group Header -->
+            <div class="flex flex-col sm:flex-row sm:items-center justify-between pb-3 border-b border-slate-800 gap-2">
+              <div class="flex items-center gap-2.5">
+                <div class="w-8 h-8 rounded-lg flex items-center justify-center text-base"
+                     :class="group.isUnassigned ? 'bg-amber-500/10 text-amber-400 border border-amber-500/30' : 'bg-indigo-500/10 text-indigo-400 border border-indigo-500/30'">
+                  <span x-text="group.isUnassigned ? '📂' : '📁'"></span>
+                </div>
+                <div>
+                  <div class="flex items-center gap-2">
+                    <h3 class="font-bold text-base text-slate-100" x-text="group.name"></h3>
+                    <span class="text-xs px-2 py-0.5 rounded-full font-semibold"
+                          :class="group.isUnassigned ? 'bg-slate-800 text-amber-300 border border-amber-500/30' : 'bg-indigo-950 text-indigo-300 border border-indigo-700/50'"
+                          x-text="`${group.agents.length} agentów`"></span>
+                  </div>
+                  <p class="text-[11px] text-slate-400" x-text="group.isUnassigned ? 'Agenci niezorganizowani w konkretny zespół' : 'Dedykowany zespół roboczy i powiązane roje podagentów'"></p>
+                </div>
+              </div>
+
+              <!-- Action buttons for group -->
+              <div class="flex items-center gap-1.5 text-xs">
+                <template x-if="!group.isUnassigned">
+                  <button @click="promptRenameFolder(group.name)" class="px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 transition flex items-center gap-1" title="Zmień nazwę folderu">
+                    <span>✏️ Zmień nazwę</span>
+                  </button>
+                </template>
+                <button @click="activeFolderFilter = group.isUnassigned ? 'unassigned' : group.name; dashboardViewMode = 'grid'; haptic();"
+                        class="px-2.5 py-1 rounded-lg bg-indigo-600/20 hover:bg-indigo-600/30 text-indigo-300 border border-indigo-500/30 transition flex items-center gap-1">
+                  <span>Filtruj kafelki</span>
+                </button>
+              </div>
+            </div>
+
+            <!-- Agents in this Group -->
+            <div class="space-y-4">
+              <!-- Render Swarm Coordinators First (Agents with subagents) -->
+              <template x-for="agent in getFolderCoordinators(group.agents)" :key="agent.slug">
+                <div class="bg-slate-950/70 border border-indigo-900/40 rounded-xl p-4 space-y-3">
+                  <!-- Coordinator Card Header -->
+                  <div class="flex items-start justify-between gap-3">
+                    <div class="flex items-center gap-3">
+                      <div class="w-10 h-10 rounded-xl bg-indigo-950/60 ring-1 ring-indigo-500/40 flex items-center justify-center text-lg shrink-0">
+                        👑
+                      </div>
+                      <div>
+                        <div class="flex items-center gap-2">
+                          <h4 class="font-bold text-slate-100 hover:text-emerald-400 transition cursor-pointer" @click="selectAgentForChat(agent)" x-text="agent.name"></h4>
+                          <span class="text-[10px] bg-indigo-500/20 text-indigo-300 border border-indigo-500/40 px-2 py-0.5 rounded font-semibold">Koordynator Zespołu</span>
+                        </div>
+                        <p class="text-xs text-slate-400 font-mono" x-text="agent.slug"></p>
+                      </div>
+                    </div>
+
+                    <div class="flex items-center gap-1.5">
+                      <button @click="openSubagentsModalFor(agent)" class="text-xs bg-indigo-600/20 hover:bg-indigo-600/30 text-indigo-300 border border-indigo-500/30 px-2.5 py-1 rounded-lg transition flex items-center gap-1 font-medium">
+                        <span>👥 Rój Podagentów</span>
+                        <strong x-text="`(${agent.subagents.length})`"></strong>
+                      </button>
+                      <button @click="openMoveFolderModalFor(agent)" class="text-xs bg-slate-800 hover:bg-slate-700 text-slate-300 px-2.5 py-1 rounded-lg transition" title="Zmień zespół / folder">
+                        📁 Przenieś
+                      </button>
+                      <button @click="selectAgentForChat(agent)" class="text-xs bg-emerald-600 hover:bg-emerald-500 text-slate-950 font-bold px-3 py-1 rounded-lg transition flex items-center gap-1">
+                        Czat
+                      </button>
+                    </div>
+                  </div>
+
+                  <p class="text-xs text-slate-300" x-text="agent.description || 'Brak opisu agenta.'"></p>
+
+                  <!-- Linked Subagents Tree -->
+                  <div class="pt-2 border-t border-slate-800/80 pl-4 space-y-2">
+                    <div class="text-[11px] font-semibold text-indigo-300 uppercase tracking-wider flex items-center gap-1.5">
+                      <span>↳</span>
+                      <span>Podlegli podagenci w roju:</span>
+                    </div>
+
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-2 pl-2 border-l-2 border-indigo-900/50">
+                      <template x-for="subSlug in agent.subagents" :key="subSlug">
+                        <div class="bg-slate-900/90 border border-slate-800/80 rounded-lg p-2.5 flex items-center justify-between text-xs hover:border-indigo-700/50 transition">
+                          <div class="truncate">
+                            <div class="font-semibold text-slate-200 truncate" x-text="getAgentBySlug(subSlug)?.name || subSlug"></div>
+                            <div class="text-[10px] font-mono text-slate-400 truncate" x-text="subSlug"></div>
+                          </div>
+                          <div class="flex items-center gap-1 shrink-0 ml-2">
+                            <button @click="selectAgentForChat(getAgentBySlug(subSlug) || { slug: subSlug, name: subSlug })"
+                                    class="text-[10px] bg-slate-800 hover:bg-emerald-600/30 text-emerald-400 hover:text-emerald-300 border border-slate-700 px-2 py-0.5 rounded transition">
+                              Czat
+                            </button>
+                          </div>
+                        </div>
+                      </template>
+                    </div>
+                  </div>
+                </div>
+              </template>
+
+              <!-- Render Independent Agents in this folder (not coordinator and not a subagent) -->
+              <template x-if="getFolderIndependentAgents(group.agents).length > 0">
+                <div class="space-y-2 pt-2">
+                  <div class="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">
+                    Samodzielni Agenci (<span x-text="getFolderIndependentAgents(group.agents).length"></span>):
+                  </div>
+                  <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                    <template x-for="agent in getFolderIndependentAgents(group.agents)" :key="agent.slug">
+                      <div class="bg-slate-950/60 border border-slate-800 rounded-xl p-3 flex flex-col justify-between hover:border-slate-700 transition">
+                        <div>
+                          <div class="flex items-start justify-between gap-1 mb-1.5">
+                            <h5 class="font-bold text-sm text-slate-200 truncate" x-text="agent.name"></h5>
+                            <span class="text-[10px] font-mono text-slate-400 bg-slate-800 px-1.5 py-0.5 rounded" x-text="agent.engine"></span>
+                          </div>
+                          <p class="text-xs text-slate-400 line-clamp-2 mb-2" x-text="agent.description || 'Brak opisu.'"></p>
+                        </div>
+                        <div class="flex items-center justify-between pt-2 border-t border-slate-800/60 text-xs">
+                          <button @click="openMoveFolderModalFor(agent)" class="text-slate-400 hover:text-slate-200">
+                            📁 Folder
+                          </button>
+                          <button @click="selectAgentForChat(agent)" class="bg-emerald-600 hover:bg-emerald-500 text-slate-950 font-bold px-2.5 py-0.5 rounded-lg text-xs">
+                            Czat
+                          </button>
+                        </div>
+                      </div>
+                    </template>
+                  </div>
+                </div>
+              </template>
             </div>
           </div>
         </template>
@@ -923,6 +1196,16 @@
               Zarządzanie zadaniami w Plane wprost przez agenta (<code class="text-xs font-mono">plane_create_issue</code>, <code class="text-xs font-mono">plane_update_state</code>) oraz wbudowany bot Telegram (long-polling w cyklu życia aplikacji, bezpieczny streaming i komendy mobilne).
             </p>
           </div>
+
+          <!-- Capability 12: Folders & Team Swarm Organization (v0.4.2) -->
+          <div class="bg-slate-950/60 p-4 rounded-xl border border-slate-800 space-y-2">
+            <h4 class="font-bold text-amber-400 flex items-center gap-2">
+              <span>📁</span> Organizacja Zespołów, Foldery & Drag-and-Drop (v0.4.2)
+            </h4>
+            <p class="text-slate-400 leading-relaxed text-xs">
+              Struktura folderów i zespołów (<code class="text-amber-300 font-mono">folder</code>) pozwala na grupowanie agentów według obszarów (np. Finanse, DevOps, Zarząd). Pulpit umożliwia filtrowanie po folderze, szybkie przenoszenie agentów i całych rojów podagentów gestem <strong>Drag-and-Drop</strong> na zakładkę folderu, a także dedykowany widok <strong>🐝 Zespoły i Rój</strong> z hierarchicznym drzewem podagentów i wyróżnieniem koordynatora zespołu.
+            </p>
+          </div>
         </div>
       </div>
 
@@ -1375,6 +1658,21 @@
                 </tr>
                 <tr>
                   <td class="px-3 py-2 text-sky-400 font-bold">GET</td>
+                  <td class="px-3 py-2 text-slate-200">/api/agents/folders/list</td>
+                  <td class="px-3 py-2 font-sans text-xs text-slate-400">Pobiera listę unikalnych folderów wraz z licznikami agentów.</td>
+                </tr>
+                <tr>
+                  <td class="px-3 py-2 text-sky-400 font-bold">PATCH</td>
+                  <td class="px-3 py-2 text-slate-200">/api/agents/{slug}/folder</td>
+                  <td class="px-3 py-2 font-sans text-xs text-slate-400">Przenosi agenta do folderu z opcjonalną propagacją roju (<code class="text-xs">move_subagents=True</code>).</td>
+                </tr>
+                <tr>
+                  <td class="px-3 py-2 text-sky-400 font-bold">POST</td>
+                  <td class="px-3 py-2 text-slate-200">/api/agents/folders/rename</td>
+                  <td class="px-3 py-2 font-sans text-xs text-slate-400">Zmienia nazwę folderu dla wszystkich przypisanych agentów.</td>
+                </tr>
+                <tr>
+                  <td class="px-3 py-2 text-sky-400 font-bold">GET</td>
                   <td class="px-3 py-2 text-slate-200">/api/agents/{slug}/knowledge/graph</td>
                   <td class="px-3 py-2 font-sans text-xs text-slate-400">Zwraca węzły i krawędzie grafu wikilinków Obsidiana dla RAG.</td>
                 </tr>
@@ -1481,6 +1779,17 @@
               <option :value="a.slug" x-text="`↳ Podagent dla: ${a.name} (${a.slug})`"></option>
             </template>
           </select>
+        </div>
+
+        <div>
+          <label class="block text-xs font-semibold text-slate-300 mb-0.5">Folder / Zespół</label>
+          <p class="text-[11px] text-slate-400 mb-1.5">Grupuj agentów w dedykowane foldery i zespoły (np. Finanse, DevOps, Zarząd).</p>
+          <input type="text" list="folders-create-datalist" x-model="newAgent.folder" placeholder="np. Finanse (lub wpisz nowy folder)" class="w-full bg-slate-800 text-slate-100 px-3.5 py-2.5 rounded-xl border border-slate-700 outline-none focus:border-emerald-500 text-xs">
+          <datalist id="folders-create-datalist">
+            <template x-for="f in availableFolders" :key="f">
+              <option :value="f"></option>
+            </template>
+          </datalist>
         </div>
 
         <div class="grid grid-cols-2 gap-3">
@@ -1714,6 +2023,17 @@
               <option :value="a.slug" x-text="`↳ Podagent dla: ${a.name} (${a.slug})`"></option>
             </template>
           </select>
+        </div>
+
+        <div>
+          <label class="block text-xs font-semibold text-slate-300 mb-0.5">Folder / Zespół</label>
+          <p class="text-[11px] text-slate-400 mb-1">Grupuj agentów w dedykowane foldery i zespoły (np. Finanse, DevOps, Zarząd).</p>
+          <input type="text" list="folders-edit-datalist" x-model="editAgent.folder" placeholder="np. Finanse (lub wpisz nowy folder)" class="w-full bg-slate-800 text-slate-100 px-3.5 py-2.5 rounded-xl border border-slate-700 outline-none focus:border-emerald-500 text-xs">
+          <datalist id="folders-edit-datalist">
+            <template x-for="f in availableFolders" :key="f">
+              <option :value="f"></option>
+            </template>
+          </datalist>
         </div>
 
         <div class="grid grid-cols-2 gap-3">
@@ -2880,6 +3200,85 @@
     </div>
   </div>
 
+  <!-- MODAL: PRZENIEŚ DO FOLDERU / ZESPOŁU (BEH-062) -->
+  <div x-show="openMoveFolderModal" class="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4" style="display: none;">
+    <div @click.away="openMoveFolderModal = false" class="bg-slate-900 border border-slate-800 w-full max-w-md rounded-2xl p-6 shadow-2xl space-y-4">
+      <div class="flex items-center justify-between border-b border-slate-800 pb-3">
+        <h3 class="text-base font-bold text-slate-100 flex items-center gap-2">
+          <span>📁</span>
+          <span>Przenieś Agenta do Zespołu / Folderu</span>
+        </h3>
+        <button @click="openMoveFolderModal = false" class="text-slate-400 hover:text-slate-200">✕</button>
+      </div>
+
+      <template x-if="moveFolderTargetAgent">
+        <div class="space-y-4 text-sm">
+          <!-- Target Agent Info Box -->
+          <div class="bg-slate-950/60 p-3 rounded-xl border border-slate-800 flex items-center gap-3">
+            <div class="w-10 h-10 rounded-xl bg-slate-800 ring-1 ring-slate-700 flex items-center justify-center overflow-hidden shrink-0">
+              <img src="/static/icon.png?v=2" alt="Agent" class="w-full h-full object-cover">
+            </div>
+            <div class="truncate">
+              <h4 class="font-bold text-slate-100 truncate" x-text="moveFolderTargetAgent.name"></h4>
+              <p class="text-xs text-slate-400 font-mono truncate" x-text="moveFolderTargetAgent.slug"></p>
+              <p class="text-[11px] text-indigo-400 mt-0.5">
+                Obecny folder: <strong x-text="moveFolderTargetAgent.folder || 'Brak folderu (unassigned)'"></strong>
+              </p>
+            </div>
+          </div>
+
+          <!-- Existing Folders Quick Selection -->
+          <div>
+            <label class="block text-xs font-semibold text-slate-300 mb-1.5">Wybierz istniejący folder / zespół:</label>
+            <div class="flex flex-wrap gap-1.5 max-h-32 overflow-y-auto custom-scroll p-1 bg-slate-950/40 rounded-xl border border-slate-800/80">
+              <button type="button"
+                      @click="moveFolderTargetValue = ''"
+                      :class="!moveFolderTargetValue ? 'bg-amber-500/20 text-amber-300 border-amber-500/40 font-semibold' : 'bg-slate-800/80 text-slate-400 border-slate-700/60'"
+                      class="px-2.5 py-1 rounded-lg text-xs border transition flex items-center gap-1">
+                <span>📂</span> Bez folderu
+              </button>
+              <template x-for="f in availableFolders" :key="f">
+                <button type="button"
+                        @click="moveFolderTargetValue = f"
+                        :class="moveFolderTargetValue === f ? 'bg-indigo-500/20 text-indigo-300 border-indigo-500/40 font-semibold' : 'bg-slate-800/80 text-slate-400 border-slate-700/60'"
+                        class="px-2.5 py-1 rounded-lg text-xs border transition flex items-center gap-1">
+                  <span>📁</span> <span x-text="f"></span>
+                </button>
+              </template>
+            </div>
+          </div>
+
+          <!-- Or Enter Custom Folder Name -->
+          <div>
+            <label class="block text-xs font-semibold text-slate-300 mb-1">Lub wpisz nazwę folderu:</label>
+            <input type="text" x-model="moveFolderTargetValue" placeholder="np. Finanse, DevOps, Zarząd..."
+                   class="w-full bg-slate-800 text-slate-100 px-3 py-2 rounded-xl border border-slate-700 outline-none focus:border-indigo-500 text-xs">
+          </div>
+
+          <!-- Move Subagents Together Option -->
+          <template x-if="moveFolderTargetAgent.subagents && moveFolderTargetAgent.subagents.length > 0">
+            <div class="bg-indigo-950/30 border border-indigo-800/40 p-3 rounded-xl space-y-1">
+              <label class="flex items-center gap-2 cursor-pointer text-xs font-medium text-indigo-200">
+                <input type="checkbox" x-model="moveFolderWithSubagents" class="rounded bg-slate-800 border-slate-700 text-indigo-500 focus:ring-0">
+                <span>Przenieś także podagentów (<span x-text="moveFolderTargetAgent.subagents.length"></span>) do tego samego zespołu</span>
+              </label>
+              <p class="text-[11px] text-slate-400 pl-6">
+                Rój podagentów (<span class="font-mono text-indigo-300" x-text="moveFolderTargetAgent.subagents.join(', ')"></span>) zostanie automatycznie zorganizowany razem z koordynatorem.
+              </p>
+            </div>
+          </template>
+
+          <div class="flex items-center justify-end gap-2 pt-2 border-t border-slate-800">
+            <button @click="openMoveFolderModal = false" class="px-4 py-2 rounded-xl text-slate-400 hover:text-slate-200 text-xs">Anuluj</button>
+            <button @click="submitMoveAgentFolder(moveFolderTargetValue)" class="bg-indigo-600 hover:bg-indigo-500 text-white font-bold px-5 py-2 rounded-xl text-xs transition">
+              Zapisz i Przenieś
+            </button>
+          </div>
+        </div>
+      </template>
+    </div>
+  </div>
+
   <script>
     function beheritApp() {
       return {
@@ -2889,6 +3288,15 @@
         selectedAgentSlug: '',
         toastMessage: '',
         runningAgentSlug: null,
+
+        // Agent Folders & Teams (BEH-062)
+        activeFolderFilter: 'all',
+        dashboardViewMode: 'grid',
+        agentSearchFilter: '',
+        openMoveFolderModal: false,
+        moveFolderTargetAgent: null,
+        moveFolderTargetValue: '',
+        moveFolderWithSubagents: true,
 
         // Auth Guard
         showAuthLockScreen: false,
@@ -3027,7 +3435,8 @@
           engine: '',
           model: '',
           master_prompt: '',
-          inherit_auth: true
+          inherit_auth: true,
+          folder: ''
         },
 
         // Engine model presets
@@ -3057,6 +3466,7 @@
           slug: '',
           description: '',
           parent_agent: '',
+          folder: '',
           engine: 'antigravity',
           modelSelect: 'gemini-3.8-flash',
           model: 'gemini-3.8-flash',
@@ -3076,6 +3486,7 @@
           name: '',
           description: '',
           parent_agent: '',
+          folder: '',
           engine: 'antigravity',
           modelSelect: 'gemini-3.8-flash',
           model: '',
@@ -3176,6 +3587,181 @@
             this.showAuthLockScreen = true;
           }
           return res;
+        },
+
+        // --- Agent Folders, Groups & Swarm Getters & Methods (BEH-062) ---
+
+        get availableFolders() {
+          const set = new Set();
+          (this.agents || []).forEach(a => {
+            if (a.folder && a.folder.trim()) {
+              set.add(a.folder.trim());
+            }
+          });
+          return Array.from(set).sort((a, b) => a.localeCompare(b, 'pl'));
+        },
+
+        get filteredAgents() {
+          let list = this.agents || [];
+          if (this.activeFolderFilter === 'unassigned') {
+            list = list.filter(a => !a.folder || !a.folder.trim());
+          } else if (this.activeFolderFilter !== 'all') {
+            list = list.filter(a => a.folder && a.folder.trim() === this.activeFolderFilter.trim());
+          }
+          if (this.agentSearchFilter && this.agentSearchFilter.trim()) {
+            const q = this.agentSearchFilter.toLowerCase().trim();
+            list = list.filter(a =>
+              (a.name && a.name.toLowerCase().includes(q)) ||
+              (a.slug && a.slug.toLowerCase().includes(q)) ||
+              (a.description && a.description.toLowerCase().includes(q))
+            );
+          }
+          return list;
+        },
+
+        get agentsGroupedByFolder() {
+          const groups = [];
+          const folders = this.availableFolders;
+          for (const f of folders) {
+            const matching = (this.agents || []).filter(a => a.folder && a.folder.trim() === f);
+            if (matching.length > 0) {
+              groups.push({ name: f, isUnassigned: false, agents: matching });
+            }
+          }
+          const unassigned = (this.agents || []).filter(a => !a.folder || !a.folder.trim());
+          if (unassigned.length > 0) {
+            groups.push({ name: 'Bez folderu (Niezorganizowani)', isUnassigned: true, agents: unassigned });
+          }
+          return groups;
+        },
+
+        getAgentCountInFolder(fName) {
+          if (!this.agents) return 0;
+          if (fName === null) {
+            return this.agents.filter(a => !a.folder || !a.folder.trim()).length;
+          }
+          return this.agents.filter(a => a.folder && a.folder.trim() === fName.trim()).length;
+        },
+
+        getAgentBySlug(slug) {
+          return (this.agents || []).find(a => a.slug === slug);
+        },
+
+        getFolderCoordinators(agentList) {
+          return (agentList || []).filter(a => a.subagents && a.subagents.length > 0);
+        },
+
+        getFolderIndependentAgents(agentList) {
+          return (agentList || []).filter(a => (!a.subagents || a.subagents.length === 0) && !a.parent_agent);
+        },
+
+        openMoveFolderModalFor(agent) {
+          this.haptic();
+          this.moveFolderTargetAgent = agent;
+          this.moveFolderTargetValue = agent.folder || '';
+          this.moveFolderWithSubagents = true;
+          this.openMoveFolderModal = true;
+        },
+
+        async submitMoveAgentFolder(folderName = null) {
+          this.haptic();
+          if (!this.moveFolderTargetAgent) return;
+          const slug = this.moveFolderTargetAgent.slug;
+          const targetFolder = (folderName !== null && folderName !== undefined) ? folderName.trim() : (this.moveFolderTargetValue ? this.moveFolderTargetValue.trim() : null);
+
+          try {
+            const res = await this.apiFetch(`/api/agents/${slug}/folder`, {
+              method: 'PATCH',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                folder: targetFolder || null,
+                move_subagents: Boolean(this.moveFolderWithSubagents)
+              })
+            });
+            if (res.ok) {
+              const data = await res.json();
+              this.openMoveFolderModal = false;
+              const subMsg = data.affected_subagents && data.affected_subagents.length > 0 ? ` (+${data.affected_subagents.length} podagentów)` : '';
+              this.showToast(`Przeniesiono agenta ${slug} do: ${targetFolder || 'Bez folderu'}${subMsg}`);
+              await this.loadAgents();
+            } else {
+              const err = await res.json();
+              alert(`Błąd przenoszenia: ${err.detail || 'Nieznany błąd'}`);
+            }
+          } catch (e) {
+            alert(`Błąd sieci: ${e.message}`);
+          }
+        },
+
+        onDragAgentStart(event, agent) {
+          event.dataTransfer.setData('text/plain', agent.slug);
+          event.dataTransfer.effectAllowed = 'move';
+        },
+
+        async onDropAgentOnFolder(targetFolder, event) {
+          this.haptic();
+          const slug = event.dataTransfer.getData('text/plain');
+          if (!slug) return;
+          const agent = (this.agents || []).find(a => a.slug === slug);
+          if (!agent) return;
+
+          const fName = targetFolder ? targetFolder.trim() : null;
+          if ((agent.folder || null) === fName) return;
+
+          try {
+            const res = await this.apiFetch(`/api/agents/${slug}/folder`, {
+              method: 'PATCH',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                folder: fName,
+                move_subagents: true
+              })
+            });
+            if (res.ok) {
+              const data = await res.json();
+              const subMsg = data.affected_subagents && data.affected_subagents.length > 0 ? ` (+${data.affected_subagents.length} podagentów)` : '';
+              this.showToast(`Przeniesiono ${agent.name} do: ${fName || 'Bez folderu'}${subMsg}`);
+              await this.loadAgents();
+            }
+          } catch (e) {
+            this.showToast(`Błąd: ${e.message}`);
+          }
+        },
+
+        async promptCreateNewFolder() {
+          this.haptic();
+          const name = prompt('Wpisz nazwę nowego folderu / zespołu (np. Finanse, DevOps, Zarząd):');
+          if (!name || !name.trim()) return;
+          const trimmed = name.trim();
+          this.activeFolderFilter = trimmed;
+          this.showToast(`Wybrano folder: ${trimmed}. Utwórz w nim agenta lub przeciągnij istniejącego.`);
+        },
+
+        async promptRenameFolder(oldName) {
+          this.haptic();
+          const newName = prompt(`Zmień nazwę folderu "${oldName}" na:`, oldName);
+          if (newName === null || newName.trim() === oldName) return;
+          const trimmed = newName.trim();
+          try {
+            const res = await this.apiFetch('/api/agents/folders/rename', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                old_name: oldName,
+                new_name: trimmed.length > 0 ? trimmed : null
+              })
+            });
+            if (res.ok) {
+              const data = await res.json();
+              this.showToast(`Zaktualizowano ${data.updated_count} agentów.`);
+              if (this.activeFolderFilter === oldName) {
+                this.activeFolderFilter = trimmed || 'all';
+              }
+              await this.loadAgents();
+            }
+          } catch (e) {
+            alert(`Błąd: ${e.message}`);
+          }
         },
 
         async initApp() {
@@ -3903,7 +4489,8 @@
               model: this.newSubagent.model || this.subagentsParentAgent.model,
               master_prompt: this.newSubagent.master_prompt.trim(),
               instructions: `Jesteś dedykowanym podagentem dla ${this.subagentsParentAgent.name}. Współpracuj z nim i wykonuj przydzielone zadania.`,
-              inherit_auth: Boolean(this.newSubagent.inherit_auth)
+              inherit_auth: Boolean(this.newSubagent.inherit_auth),
+              folder: this.subagentsParentAgent.folder || null
             };
 
             const res = await this.apiFetch(`/api/agents/${this.subagentsParentAgent.slug}/subagents`, {
@@ -3922,7 +4509,8 @@
                 engine: '',
                 model: '',
                 master_prompt: '',
-                inherit_auth: true
+                inherit_auth: true,
+                folder: ''
               };
               await this.loadSubagents(this.subagentsParentAgent.slug);
               await this.loadAgents();
@@ -3972,11 +4560,13 @@
 
         async openCreateModalDialog() {
           this.haptic();
+          const defaultFolder = (this.activeFolderFilter !== 'all' && this.activeFolderFilter !== 'unassigned') ? this.activeFolderFilter : '';
           this.newAgent = {
             name: '',
             slug: '',
             description: '',
             parent_agent: '',
+            folder: defaultFolder,
             engine: 'antigravity',
             modelSelect: 'gemini-3.8-flash',
             model: 'gemini-3.8-flash',
@@ -4141,6 +4731,7 @@
               slug: this.newAgent.slug,
               description: this.newAgent.description ? this.newAgent.description.trim() : '',
               parent_agent: this.newAgent.parent_agent || null,
+              folder: this.newAgent.folder ? this.newAgent.folder.trim() : null,
               engine: this.newAgent.engine,
               model: this.newAgent.model.trim(),
               terminal_mode: this.newAgent.terminal_mode,
@@ -4190,6 +4781,7 @@
             name: agent.name || '',
             description: agent.description || '',
             parent_agent: agent.parent_agent || '',
+            folder: agent.folder || '',
             engine: engine,
             modelSelect: modelSelect,
             model: model || (isPreset ? modelSelect : ''),
@@ -4265,6 +4857,7 @@
               name: this.editAgent.name,
               description: this.editAgent.description,
               parent_agent: this.editAgent.parent_agent || null,
+              folder: this.editAgent.folder ? this.editAgent.folder.trim() : null,
               engine: this.editAgent.engine,
               model: this.editAgent.model.trim(),
               master_prompt: this.editAgent.master_prompt,
