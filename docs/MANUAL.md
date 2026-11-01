@@ -301,12 +301,25 @@ Dla każdego agenta można zdefiniować jeden z 3 poziomów dostępu do powłoki
 
 ---
 
-### Wieloagentowy Rój i Delegowanie Zadań (Multi-Agent Swarm)
+### Wieloagentowy Rój i Delegowanie Zadań (Multi-Agent Swarm & Subagents)
 
-W wersji v0.4.0 wprowadzono mechanizm współpracy wielu wyspecjalizowanych agentów:
-- Narzędzie `call_agent(agent_slug, prompt)` pozwala agentowi głównemu na podział złożonego problemu i oddelegowanie podzadań do innych agentów (np. agent programista wywołuje agenta analityka lub testera).
-- Wbudowany mechanizm **ochrony przed rekurencją** (`max_depth=3`) uniemożliwia powstanie nieskończonych pętli wzajemnych wywołań.
-- Interfejs Web UI wizualizuje drzewo delegacji w czasie rzeczywistym ze zdarzeniami `agent_delegation` i `agent_delegation_result`.
+W wersji v0.4.0 i v0.4.1 wprowadzono kompleksowy mechanizm współpracy wielu agentów w architekturze roju (Swarm Hierarchy):
+- **Hierarchia Agentów (`parent_agent` i `subagents`):** Agent główny (koordynator) może posiadać dowolną liczbę wyspecjalizowanych podagentów podległych bezpośrednio jemu. Relacja zapisywana jest dwukierunkowo w plikach `agent.md`.
+- **Dynamiczne Powoływanie Podagentów (`create_subagent`):** Narzędzie `create_subagent(name, slug, master_prompt, ...)` pozwala agentowi na w pełni autonomiczne tworzenie nowych jednostek wykonawczych w trakcie pracy.
+- **Dziedziczenie Sesji (Credential Inheritance):** Podagenci automatycznie dziedziczą sesję uwierzytelnienia (auth session) od agenta nadrzędnego — nie wymagają ponownego podawania kluczy API ani logowania do platformy SDK.
+- **Delegowanie Zadań (`call_agent` i `delegate_task`):** Pozwala agentowi nadrzędnemu na zlecenia podzadań do podagentów z wbudowanym strażnikiem rekurencji (`max_depth=3`) zapobiegającym zapętleniom.
+- **Dedykowany Modal w Web UI (`👥 Podagenci`):** Umożliwia wygodne przeglądanie roju powiązanego z agentem, szybkie tworzenie nowych podagentów, natychmiastowe przejście do czatu z podagentem oraz odłączanie jednostek.
+
+---
+
+### Organizacja Zespołów, Foldery i Drag-and-Drop (Team Swarm Organization)
+
+W wersji v0.4.2 wprowadzono system folderów i zespołów eliminujący problem wyświetlania wszystkich agentów na płaskim pulpicie:
+- **Foldery i Zespoły (`folder`):** Każdy agent może zostać przypisany do dedykowanego zespołu (np. *Finanse*, *DevOps*, *Zarząd*, *Marketing*). Pole `folder` jest bezstratnie zapisywane w frontmatterze `agent.md`.
+- **Automatyczne Dziedziczenie Folderu w Roju:** Gdy koordynator zespołu powołuje nowego podagenta, podagent automatycznie dziedziczy ten sam folder, dzięki czemu cały zespół roboczy pozostaje zorganizowany razem bez ręcznego tagowania.
+- **Przenoszenie Drag-and-Drop:** Kafelki agentów na pulpicie można swobodnie chwycić i upuścić na dowolną zakładkę folderu (lub zakładkę *Bez folderu*), co natychmiast przenosi agenta wraz z opcjonalną propagacją całego roju podagentów.
+- **Dedykowany Widok Hierarchiczny `🐝 Zespoły i Rój`:** Oprócz standardowej siatki kafelków pulpit udostępnia widok zespołowy, w którym agenci są pogrupowani według folderów, a koordynatorzy zespołów (`👑 Koordynator Zespołu`) są prezentowani wraz z wizualnym drzewem podległych podagentów.
+- **Masowa Zmiana Nazwy:** Przycisk ołówka `✏️` na zakładce folderu pozwala natychmiast zaktualizować nazwę zespołu u wszystkich przypisanych agentów jednym kliknięciem.
 
 ---
 
@@ -403,6 +416,10 @@ W tej sekcji szczegółowo wyjaśniono działanie każdego przycisku, pola i okn
 | **Przycisk `💬 Czat`** | Przełącza widok na okno czatu interaktywnego z tym konkretnym agentem i wczytuje historię ostatniej konwersacji. |
 | **Przycisk `📚 Wiedza`** | Otwiera modal menedżera bazy wiedzy RAG: listę dokumentów, formularz uploadu i wyszukiwarkę semantyczną. |
 | **Przycisk `🔌 n8n`** | Otwiera centrum integracji webhooków z gotowymi szablonami zapytań HTTP dla n8n oraz poleceniami cURL. |
+| **Przycisk `👥 Podagenci`** | Otwiera okno zarządzania rojem podagentów (Swarm): lista powiązanych jednostek roboczych, szybki kreator nowego podagenta z dziedziczeniem poświadczeń, przejście do czatu oraz odłączanie jednostek. |
+| **Przycisk `📁 Folder / Przenieś`** | Otwiera modal szybkiego przenoszenia agenta do istniejącego lub nowego folderu z opcją automatycznego przeniesienia całego roju podagentów. |
+| **Pasek Nawigacji Folderów** | Pasek zakładek nad siatką: `🌐 Wszystkie`, dynamiczne zakładki zespołów (z licznikiem i edycją `✏️`), `📂 Bez folderu` oraz przycisk `＋ Nowy Folder`. Służy również jako strefa upuszczenia Drag-and-Drop. |
+| **Przełącznik `⊞ Kafelki` vs `🐝 Zespoły i Rój`** | Przełącza między płaskim widokiem siatki a zhierarchizowanym widokiem zespołowym z wizualnym drzewem podagentów koordynowanych przez agenta głównego. |
 | **Przycisk `⚙️ Edytuj`** | Otwiera pełne okno modyfikacji konfiguracji agenta (prompty, uprawnienia, harmonogramy, MCP). |
 | **Przycisk `🔑 Klucz`** | Otwiera modal zarządzania poświadczeniami SDK/API oraz narzędzie natychmiastowego testu połączenia. |
 | **Przycisk `🗑️ Usuń`** | Wyświetla monit potwierdzenia, a po zatwierdzeniu trwale usuwa katalog agenta z dysku oraz kaskadowo czyści powiązane rekordy w SQLite. |
@@ -415,6 +432,7 @@ W tej sekcji szczegółowo wyjaśniono działanie każdego przycisku, pola i okn
 | :--- | :--- |
 | **Nazwa Agenta (`name`)** | Nazwa wyświetlana na pulpicie, w nagłówkach czatu i w wygenerowanych raportach. |
 | **Opis Agenta (`description`)** | Krótka notka informacyjna wyświetlana na kafelku pulpitu, opisująca zadanie i cel agenta. |
+| **Hierarchia Roju (`parent_agent`)** | Określa, czy dany agent jest niezależną jednostką główną, czy dedykowanym podagentem przypisanym do innego agenta koordynującego. Podagenci widoczni są w roju agenta nadrzędnego. |
 | **Slug / Folder (`slug`)** | Unikalny identyfikator techniczny; stanowi nazwę katalogu na dysku/w Obsidianie. Generowany automatycznie z nazwy. |
 | **Silnik SDK (`engine`)** | Wybór adaptera środowiska wykonawczego: `Google Antigravity SDK`, `Claude Code SDK` lub `OpenAI Codex`. |
 | **Model Silnika (`model`)** | Identyfikator modelu LLM (np. `gemini-3.8-flash`, `claude-3-7-sonnet-20250219`, `gpt-4o`). |
@@ -587,6 +605,12 @@ curl -X POST "http://localhost:8650/api/agents/analityk-rynkow/run" \
 | `POST` | `/api/agents/{slug}/knowledge` | Wgranie nowego pliku do bazy wiedzy (MD, PDF, Obraz). |
 | `POST` | `/api/agents/{slug}/knowledge/link` | Zapisanie linku WWW lub wideo YouTube z autodetekcją metadanych. |
 | `POST` | `/api/agents/{slug}/knowledge/search` | Odpytanie silnika RAG (BM25) o relevantne fragmenty dokumentów. |
+| `GET` | `/api/agents/{slug}/subagents` | Pobranie listy wyspecjalizowanych podagentów przypisanych do agenta nadrzędnego. |
+| `POST` | `/api/agents/{slug}/subagents` | Utworzenie nowego podagenta z automatycznym dziedziczeniem sesji poświadczeń. |
+| `DELETE` | `/api/agents/{slug}/subagents/{sub_slug}` | Bezpieczne odłączenie podagenta od agenta nadrzędnego. |
+| `GET` | `/api/agents/folders/list` | Zwraca listę wszystkich unikalnych folderów wraz z liczbą agentów w każdym folderze. |
+| `PATCH` | `/api/agents/{slug}/folder` | Przenosi agenta do innego folderu/zespołu z opcjonalną propagacją całego roju (`move_subagents=True`). |
+| `POST` | `/api/agents/folders/rename` | Masowa zmiana nazwy folderu dla wszystkich przypisanych do niego agentów. |
 | `GET` | `/api/history` | Rejestr wykonanych audytów i zadań autonomicznych z SQLite. |
 | `GET` | `/api/reports/view` | Bezpieczny odczyt wygenerowanego pliku raportu Markdown. |
 | `GET` | `/api/reports/artifact` | Strumieniowanie wygenerowanego pliku multimedialnego (obraz, wideo, dane). |
