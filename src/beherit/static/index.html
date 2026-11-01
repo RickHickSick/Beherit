@@ -232,6 +232,16 @@
                     🔌 MCP (<span x-text="Object.keys(agent.mcp_servers).length"></span>)
                   </span>
                 </template>
+                <template x-if="agent.parent_agent">
+                  <span class="bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 px-2 py-0.5 rounded-md flex items-center gap-1">
+                    ↳ Podagent dla: <strong x-text="agent.parent_agent"></strong>
+                  </span>
+                </template>
+                <template x-if="agent.subagents && agent.subagents.length > 0">
+                  <span @click="openSubagentsModalFor(agent)" class="bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-300 border border-indigo-500/20 px-2 py-0.5 rounded-md flex items-center gap-1 cursor-pointer transition">
+                    👥 Podagenci: <strong x-text="agent.subagents.length"></strong>
+                  </span>
+                </template>
               </div>
             </div>
 
@@ -296,6 +306,9 @@
                   </button>
                   <button @click="openIntegrationModalFor(agent)" class="text-slate-400 hover:text-sky-400 px-1 py-1 rounded transition flex items-center gap-1" title="Integracja Webhook / n8n">
                     🔌 n8n / API
+                  </button>
+                  <button @click="openSubagentsModalFor(agent)" class="text-slate-400 hover:text-indigo-400 px-1 py-1 rounded transition flex items-center gap-1" title="Zarządzanie Podagentami">
+                    👥 Podagenci
                   </button>
                 </div>
                 <div class="flex items-center gap-2">
@@ -861,13 +874,13 @@
             </p>
           </div>
 
-          <!-- Capability 7: Multi-Agent Swarm (v0.4.0) -->
+          <!-- Capability 7: Multi-Agent Swarm & Subagents (v0.4.1) -->
           <div class="bg-slate-950/60 p-4 rounded-xl border border-slate-800 space-y-2">
             <h4 class="font-bold text-indigo-400 flex items-center gap-2">
-              <span>🐝</span> Wieloagentowy Rój (Multi-Agent Swarm)
+              <span>🐝</span> Wieloagentowy Rój & Podagenci (Subagents Swarm)
             </h4>
             <p class="text-slate-400 leading-relaxed text-xs">
-              Narzędzie <code class="text-indigo-300 font-mono">call_agent(agent_slug, prompt)</code> pozwala agentom na autonomiczne zlecanie podzadań innym wyspecjalizowanym jednostkom. Wbudowany strażnik rekurencji (<code class="text-indigo-400">max_depth=3</code>) zapobiega zapętleniom, a interfejs wizualizuje drzewo delegacji w czasie rzeczywistym.
+              Pełna hierarchia roju: powoływanie wyspecjalizowanych podagentów podlegających agentowi głównemu (<code class="text-indigo-300 font-mono">parent_agent</code> / <code class="text-indigo-300 font-mono">subagents</code>). Agenci mogą autonomicznie powoływać nowych podagentów narzędziem <code class="text-indigo-300 font-mono">create_subagent(name, slug, master_prompt)</code> oraz zlecać im podzadania (<code class="text-indigo-300 font-mono">delegate_task</code> / <code class="text-indigo-300 font-mono">call_agent</code>). Podagenci automatycznie dziedziczą sesję uwierzytelnienia (auth session) od koordynatora. Interfejs UI udostępnia dedykowany modal <strong>👥 Podagenci</strong> z szybkim kreatorem i podglądem czatu.
             </p>
           </div>
 
@@ -966,6 +979,10 @@
                   <td class="px-3 py-2.5 text-slate-400">Otwiera centrum integracji webhooków: generator gotowego węzła HTTP Request w n8n, polecenia cURL oraz narzędzie testowania na żywo.</td>
                 </tr>
                 <tr>
+                  <td class="px-3 py-2.5 font-bold text-indigo-400">Przycisk 👥 Podagenci</td>
+                  <td class="px-3 py-2.5 text-slate-400">Otwiera okno zarządzania rojem podagentów (Swarm): lista powiązanych jednostek roboczych, szybki kreator nowego podagenta z dziedziczeniem sesji uwierzytelniania, skróty do bezpośredniego czatu oraz odłączanie podagentów.</td>
+                </tr>
+                <tr>
                   <td class="px-3 py-2.5 font-bold text-slate-200">Przycisk ⚙️ Edytuj</td>
                   <td class="px-3 py-2.5 text-slate-400">Otwiera modal pełnej modyfikacji agenta: zmiana nazwy, silnika, modelu, poziomu terminala, promptu głównego i harmonogramów cron.</td>
                 </tr>
@@ -1007,6 +1024,10 @@
                 <tr>
                   <td class="px-3 py-2.5 font-bold text-slate-200">Opis Agenta (`description`)</td>
                   <td class="px-3 py-2.5 text-slate-400">Krótka notatka prezentowana na kafelku agenta wyjaśniająca jego rolę (np. <em>Audytor spójności tabel rynkowych</em>).</td>
+                </tr>
+                <tr>
+                  <td class="px-3 py-2.5 font-bold text-indigo-400">Hierarchia Roju (`parent_agent`)</td>
+                  <td class="px-3 py-2.5 text-slate-400">Określa, czy dany agent jest niezależną jednostką główną, czy dedykowanym podagentem przypisanym do innego agenta koordynującego. Podagenci widoczni są w roju agenta nadrzędnego i mogą otrzymywać delegowane zadania.</td>
                 </tr>
                 <tr>
                   <td class="px-3 py-2.5 font-bold text-slate-200">Slug (Folder) (`slug`)</td>
@@ -1214,6 +1235,10 @@
                     <td class="px-3 py-2 text-slate-300">Delegowanie podzadania do innego agenta w systemie (Swarm z limitem głębokości 3).</td>
                   </tr>
                   <tr>
+                    <td class="px-3 py-2 font-mono text-indigo-300">create_subagent(name, slug, ...)</td>
+                    <td class="px-3 py-2 text-slate-300">Dynamiczne powoływanie wyspecjalizowanego podagenta w roju z automatycznym dziedziczeniem sesji uwierzytelniania.</td>
+                  </tr>
+                  <tr>
                     <td class="px-3 py-2 font-mono text-cyan-400">save_memory / recall_memory</td>
                     <td class="px-3 py-2 text-slate-300">Zapisywanie i odczyt faktów długoterminowych z pliku <code class="text-xs">memory.md</code> agenta.</td>
                   </tr>
@@ -1344,6 +1369,11 @@
                   <td class="px-3 py-2 font-sans text-xs text-slate-400">Listowanie oraz tworzenie skryptów w katalogu skills/ agenta.</td>
                 </tr>
                 <tr>
+                  <td class="px-3 py-2 text-sky-400 font-bold">GET/POST</td>
+                  <td class="px-3 py-2 text-slate-200">/api/agents/{slug}/subagents</td>
+                  <td class="px-3 py-2 font-sans text-xs text-slate-400">Listowanie oraz powoływanie podagentów z dziedziczeniem sesji poświadczeń.</td>
+                </tr>
+                <tr>
                   <td class="px-3 py-2 text-sky-400 font-bold">GET</td>
                   <td class="px-3 py-2 text-slate-200">/api/agents/{slug}/knowledge/graph</td>
                   <td class="px-3 py-2 font-sans text-xs text-slate-400">Zwraca węzły i krawędzie grafu wikilinków Obsidiana dla RAG.</td>
@@ -1440,6 +1470,17 @@
           <label class="block text-xs font-semibold text-slate-300 mb-0.5">Opis Agenta</label>
           <p class="text-[11px] text-slate-400 mb-1.5">Krótki opis przeznaczenia agenta wyświetlany na kafelku pulpitu.</p>
           <input type="text" x-model="newAgent.description" placeholder="np. Monitorowanie kursów walut, spółek giełdowych i wskaźników makro" class="w-full bg-slate-800 text-slate-100 px-3.5 py-2.5 rounded-xl border border-slate-700 outline-none focus:border-emerald-500">
+        </div>
+
+        <div>
+          <label class="block text-xs font-semibold text-slate-300 mb-0.5">Hierarchia Roju (Parent Agent / Subagent)</label>
+          <p class="text-[11px] text-slate-400 mb-1.5">Czy ten agent ma być niezależnym agentem głównym, czy podagentem dedykowanym dla innego agenta?</p>
+          <select x-model="newAgent.parent_agent" class="w-full bg-slate-800 text-slate-100 px-3.5 py-2.5 rounded-xl border border-slate-700 outline-none text-xs">
+            <option value="">Agent Główny (Niezależny)</option>
+            <template x-for="a in agents" :key="a.slug">
+              <option :value="a.slug" x-text="`↳ Podagent dla: ${a.name} (${a.slug})`"></option>
+            </template>
+          </select>
         </div>
 
         <div class="grid grid-cols-2 gap-3">
@@ -1662,6 +1703,17 @@
           <label class="block text-xs font-semibold text-slate-300 mb-0.5">Opis Agenta</label>
           <p class="text-[11px] text-slate-400 mb-1">Krótki opis przeznaczenia agenta wyświetlany na kafelku.</p>
           <input type="text" x-model="editAgent.description" class="w-full bg-slate-800 text-slate-100 px-3.5 py-2.5 rounded-xl border border-slate-700 outline-none focus:border-emerald-500">
+        </div>
+
+        <div>
+          <label class="block text-xs font-semibold text-slate-300 mb-0.5">Hierarchia Roju (Parent Agent / Subagent)</label>
+          <p class="text-[11px] text-slate-400 mb-1">Przypisz tego agenta jako podagenta do innego agenta głównego.</p>
+          <select x-model="editAgent.parent_agent" class="w-full bg-slate-800 text-slate-100 px-3.5 py-2.5 rounded-xl border border-slate-700 outline-none text-xs">
+            <option value="">Brak (Agent Główny / Niezależny)</option>
+            <template x-for="a in agents.filter(x => x.slug !== editAgent.slug)" :key="a.slug">
+              <option :value="a.slug" x-text="`↳ Podagent dla: ${a.name} (${a.slug})`"></option>
+            </template>
+          </select>
         </div>
 
         <div class="grid grid-cols-2 gap-3">
@@ -2684,6 +2736,124 @@
     </div>
   </div>
 
+  <!-- MODAL: ZARZĄDZANIE PODAGENTAMI I RÓJ (BEH-060) -->
+  <div x-show="openSubagentsModal" class="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4" style="display: none;">
+    <div @click.away="openSubagentsModal = false" class="bg-slate-900 border border-slate-800 w-full max-w-2xl rounded-2xl p-6 shadow-2xl space-y-4 max-h-[90vh] flex flex-col">
+      <div class="flex items-center justify-between border-b border-slate-800 pb-3 shrink-0">
+        <div>
+          <h3 class="text-base font-bold text-slate-100 flex items-center gap-2">
+            <span>👥</span> Rój Podagentów (<span class="font-mono text-indigo-400" x-text="subagentsParentAgent?.name"></span>)
+          </h3>
+          <p class="text-xs text-slate-400">
+            Zarządzaj hierarchią podagentów koordynowanych przez <strong class="text-slate-300" x-text="subagentsParentAgent?.slug"></strong>.
+          </p>
+        </div>
+        <button @click="openSubagentsModal = false" class="text-slate-400 hover:text-slate-200">✕</button>
+      </div>
+
+      <!-- Info Banner -->
+      <div class="bg-indigo-950/30 border border-indigo-800/40 rounded-xl p-3 text-xs text-indigo-200 flex items-start gap-2.5 shrink-0">
+        <span class="text-base">💡</span>
+        <div class="space-y-1">
+          <p>
+            <strong>Autonomia Roju:</strong> Agent główny może delegować podzadania do swoich podagentów za pomocą narzędzia <code class="font-mono text-indigo-300 bg-indigo-900/50 px-1 py-0.5 rounded">delegate_task(subagent_slug, task)</code> lub dynamicznie powoływać nowych podagentów narzędziem <code class="font-mono text-indigo-300 bg-indigo-900/50 px-1 py-0.5 rounded">create_subagent(...)</code>.
+          </p>
+          <p class="text-[11px] text-indigo-300/80">
+            Podagenci automatycznie dziedziczą sesję uwierzytelnienia (auth session) oraz uprawnienia agenta nadrzędnego.
+          </p>
+        </div>
+      </div>
+
+      <!-- Subagents List -->
+      <div class="flex-1 overflow-y-auto space-y-2 pr-1 custom-scroll min-h-[140px]">
+        <div class="flex items-center justify-between pb-1">
+          <span class="text-xs font-semibold text-slate-300">Przypisani Podagenci (<span x-text="currentSubagents.length"></span>)</span>
+          <button @click="showCreateSubagentForm = !showCreateSubagentForm" class="text-xs text-indigo-400 hover:text-indigo-300 font-medium flex items-center gap-1 transition">
+            <span x-text="showCreateSubagentForm ? '▲ Zwiń Formularz' : '＋ Utwórz Nowego Podagenta'"></span>
+          </button>
+        </div>
+
+        <template x-if="isLoadingSubagents">
+          <div class="p-6 text-center text-slate-500 text-xs">Ładowanie podagentów...</div>
+        </template>
+
+        <template x-if="!isLoadingSubagents && currentSubagents.length === 0">
+          <div class="p-6 text-center text-slate-500 text-xs border border-dashed border-slate-800 rounded-xl space-y-1">
+            <p>Brak podagentów przypisanych do tego agenta.</p>
+            <p class="text-[11px] text-slate-600">Kliknij „Utwórz Nowego Podagenta” lub edytuj istniejącego agenta i ustaw pole „↳ Podagent dla”.</p>
+          </div>
+        </template>
+
+        <template x-for="sub in currentSubagents" :key="sub.slug">
+          <div class="p-3 bg-slate-950/60 border border-slate-800/80 rounded-xl hover:border-slate-700 transition flex items-center justify-between gap-3">
+            <div class="min-w-0 flex-1">
+              <div class="flex items-center gap-2 mb-1 flex-wrap">
+                <span class="text-xs font-bold text-slate-200" x-text="sub.name"></span>
+                <span class="font-mono text-[11px] text-indigo-400 bg-indigo-500/10 px-1.5 py-0.5 rounded border border-indigo-500/20" x-text="sub.slug"></span>
+                <span class="text-[10px] font-mono uppercase bg-slate-800 text-slate-300 px-1.5 py-0.5 rounded" x-text="sub.engine"></span>
+                <span class="text-[10px] text-slate-400 truncate max-w-[120px]" x-text="sub.model"></span>
+              </div>
+              <div class="text-[11px] text-slate-400 truncate" x-text="sub.description || 'Brak opisu'"></div>
+            </div>
+            <div class="flex items-center gap-1.5 shrink-0">
+              <button @click="openChatWithSubagent(sub)" class="bg-indigo-600/20 hover:bg-indigo-600/30 text-indigo-300 border border-indigo-500/30 px-2.5 py-1 rounded-lg text-xs transition flex items-center gap-1 font-medium" title="Otwórz czat z tym podagentem">
+                💬 Czat
+              </button>
+              <button @click="unlinkSubagent(sub.slug)" class="text-slate-500 hover:text-rose-400 p-1.5 text-xs transition rounded-lg hover:bg-slate-800" title="Odłącz od tego agenta nadrzędnego">
+                ✕ Odłącz
+              </button>
+            </div>
+          </div>
+        </template>
+      </div>
+
+      <!-- Inline Create Subagent Form -->
+      <div x-show="showCreateSubagentForm" class="pt-3 border-t border-slate-800 space-y-3 shrink-0 bg-slate-950/40 p-3.5 rounded-xl border border-indigo-950/50">
+        <div class="flex items-center justify-between">
+          <span class="text-xs font-bold text-slate-200 flex items-center gap-1.5">
+            <span>✨</span> Szybkie Tworzenie Podagenta
+          </span>
+          <button @click="showCreateSubagentForm = false" class="text-slate-500 hover:text-slate-300 text-xs">✕</button>
+        </div>
+
+        <div class="grid grid-cols-2 gap-2">
+          <div>
+            <label class="block text-[11px] font-semibold text-slate-400 mb-0.5">Nazwa Podagenta</label>
+            <input type="text" x-model="newSubagent.name" @input="newSubagent.slug = generateSlug(newSubagent.name)" placeholder="np. Badacz Dokumentacji" class="w-full bg-slate-800 text-slate-100 px-2.5 py-1.5 rounded-lg border border-slate-700 text-xs outline-none focus:border-indigo-500">
+          </div>
+          <div>
+            <label class="block text-[11px] font-semibold text-slate-400 mb-0.5">Slug (Identyfikator)</label>
+            <input type="text" x-model="newSubagent.slug" placeholder="np. badacz-dokumentacji" class="w-full bg-slate-800 font-mono text-slate-100 px-2.5 py-1.5 rounded-lg border border-slate-700 text-xs outline-none focus:border-indigo-500">
+          </div>
+        </div>
+
+        <div>
+          <label class="block text-[11px] font-semibold text-slate-400 mb-0.5">Opis roli podagenta</label>
+          <input type="text" x-model="newSubagent.description" placeholder="np. Odpowiada za wyszukiwanie informacji w bazach wiedzy i WWW" class="w-full bg-slate-800 text-slate-100 px-2.5 py-1.5 rounded-lg border border-slate-700 text-xs outline-none focus:border-indigo-500">
+        </div>
+
+        <div>
+          <label class="block text-[11px] font-semibold text-slate-400 mb-0.5">Master Prompt / Wytyczne roli</label>
+          <textarea x-model="newSubagent.master_prompt" rows="2" placeholder="Wprowadź instrukcję systemową dla podagenta..." class="w-full bg-slate-900 text-slate-200 p-2 rounded-lg border border-slate-700 text-xs outline-none focus:border-indigo-500"></textarea>
+        </div>
+
+        <div class="flex items-center justify-between pt-1">
+          <label class="flex items-center gap-2 text-xs text-slate-300 cursor-pointer">
+            <input type="checkbox" x-model="newSubagent.inherit_auth" class="rounded bg-slate-800 border-slate-700 text-indigo-500 focus:ring-0">
+            <span>Dziedzicz sesję autoryzacji (OAuth / API Key) od agenta głównego</span>
+          </label>
+          <button @click="saveNewSubagent()" :disabled="!newSubagent.name.trim() || !newSubagent.slug.trim() || !newSubagent.master_prompt.trim()" class="bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white font-bold px-4 py-1.5 rounded-lg text-xs transition">
+            Utwórz i Dołącz
+          </button>
+        </div>
+      </div>
+
+      <div class="pt-2 border-t border-slate-800 flex justify-end shrink-0">
+        <button @click="openSubagentsModal = false" class="bg-slate-800 hover:bg-slate-700 text-slate-200 px-4 py-1.5 rounded-xl text-xs font-semibold">Zamknij</button>
+      </div>
+    </div>
+  </div>
+
   <!-- MODAL: SESSION TITLE / NEW SESSION (BEH-051) -->
   <div x-show="openSessionModal" class="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4" style="display: none;">
     <div @click.away="openSessionModal = false" class="bg-slate-900 border border-slate-800 w-full max-w-md rounded-2xl p-6 shadow-2xl space-y-4">
@@ -2844,6 +3014,22 @@
         runningSkill: null,
         skillRunOutput: null,
 
+        // Subagents & Swarm Hierarchy (BEH-060)
+        openSubagentsModal: false,
+        subagentsParentAgent: null,
+        currentSubagents: [],
+        isLoadingSubagents: false,
+        showCreateSubagentForm: false,
+        newSubagent: {
+          name: '',
+          slug: '',
+          description: '',
+          engine: '',
+          model: '',
+          master_prompt: '',
+          inherit_auth: true
+        },
+
         // Engine model presets
         engineModelOptions: {
           'antigravity': [
@@ -2870,6 +3056,7 @@
           name: '',
           slug: '',
           description: '',
+          parent_agent: '',
           engine: 'antigravity',
           modelSelect: 'gemini-3.8-flash',
           model: 'gemini-3.8-flash',
@@ -2888,6 +3075,7 @@
           slug: '',
           name: '',
           description: '',
+          parent_agent: '',
           engine: 'antigravity',
           modelSelect: 'gemini-3.8-flash',
           model: '',
@@ -3659,6 +3847,120 @@
           }
         },
 
+        // Subagents & Swarm Hierarchy (BEH-060)
+        async openSubagentsModalFor(agent) {
+          this.haptic();
+          this.subagentsParentAgent = agent;
+          this.showCreateSubagentForm = false;
+          this.newSubagent = {
+            name: '',
+            slug: '',
+            description: '',
+            engine: agent.engine || 'antigravity',
+            model: agent.model || '',
+            master_prompt: `Jesteś wyspecjalizowanym podagentem dla agenta ${agent.name}. Realizujesz podzadania delegowane przez agenta nadrzędnego.`,
+            inherit_auth: true
+          };
+          this.openSubagentsModal = true;
+          await this.loadSubagents(agent.slug);
+        },
+
+        async loadSubagents(slug) {
+          this.isLoadingSubagents = true;
+          try {
+            const res = await this.apiFetch(`/api/agents/${slug}/subagents`);
+            if (res.ok) {
+              const data = await res.json();
+              this.currentSubagents = data.subagents || [];
+            } else {
+              this.currentSubagents = [];
+            }
+          } catch (e) {
+            console.error('Failed to load subagents:', e);
+            this.currentSubagents = [];
+          } finally {
+            this.isLoadingSubagents = false;
+          }
+        },
+
+        async saveNewSubagent() {
+          this.haptic();
+          if (!this.subagentsParentAgent) return;
+          if (!this.newSubagent.name.trim() || !this.newSubagent.slug.trim()) {
+            alert('Podaj nazwę i unikalny slug dla podagenta.');
+            return;
+          }
+          if (!this.newSubagent.master_prompt.trim()) {
+            alert('Podaj rolę (Master Prompt) dla podagenta.');
+            return;
+          }
+          try {
+            const payload = {
+              name: this.newSubagent.name.trim(),
+              slug: this.newSubagent.slug.trim(),
+              description: this.newSubagent.description ? this.newSubagent.description.trim() : `Podagent dla ${this.subagentsParentAgent.name}`,
+              engine: this.newSubagent.engine || this.subagentsParentAgent.engine,
+              model: this.newSubagent.model || this.subagentsParentAgent.model,
+              master_prompt: this.newSubagent.master_prompt.trim(),
+              instructions: `Jesteś dedykowanym podagentem dla ${this.subagentsParentAgent.name}. Współpracuj z nim i wykonuj przydzielone zadania.`,
+              inherit_auth: Boolean(this.newSubagent.inherit_auth)
+            };
+
+            const res = await this.apiFetch(`/api/agents/${this.subagentsParentAgent.slug}/subagents`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(payload)
+            });
+
+            if (res.ok) {
+              this.showToast(`Utworzono podagenta ${payload.name}`);
+              this.showCreateSubagentForm = false;
+              this.newSubagent = {
+                name: '',
+                slug: '',
+                description: '',
+                engine: '',
+                model: '',
+                master_prompt: '',
+                inherit_auth: true
+              };
+              await this.loadSubagents(this.subagentsParentAgent.slug);
+              await this.loadAgents();
+            } else {
+              const err = await res.json();
+              alert(`Błąd tworzenia podagenta: ${err.detail || 'Nieznany błąd'}`);
+            }
+          } catch (e) {
+            alert(`Błąd sieci: ${e.message}`);
+          }
+        },
+
+        async unlinkSubagent(subSlug) {
+          this.haptic();
+          if (!this.subagentsParentAgent) return;
+          if (!confirm(`Czy na pewno chcesz odłączyć podagenta "${subSlug}" od agenta "${this.subagentsParentAgent.name}"?`)) return;
+          try {
+            const res = await this.apiFetch(`/api/agents/${this.subagentsParentAgent.slug}/subagents/${subSlug}`, {
+              method: 'DELETE'
+            });
+            if (res.ok) {
+              this.showToast(`Odłączono podagenta ${subSlug}`);
+              await this.loadSubagents(this.subagentsParentAgent.slug);
+              await this.loadAgents();
+            } else {
+              const err = await res.json();
+              alert(`Błąd odłączania: ${err.detail || 'Nieznany błąd'}`);
+            }
+          } catch (e) {
+            alert(`Błąd sieci: ${e.message}`);
+          }
+        },
+
+        openChatWithSubagent(sub) {
+          this.openSubagentsModal = false;
+          this.selectAgentForChat(sub);
+        },
+
         renderMarkdown(text) {
           if (!text) return '';
           try {
@@ -3674,6 +3976,7 @@
             name: '',
             slug: '',
             description: '',
+            parent_agent: '',
             engine: 'antigravity',
             modelSelect: 'gemini-3.8-flash',
             model: 'gemini-3.8-flash',
@@ -3837,6 +4140,7 @@
               name: this.newAgent.name,
               slug: this.newAgent.slug,
               description: this.newAgent.description ? this.newAgent.description.trim() : '',
+              parent_agent: this.newAgent.parent_agent || null,
               engine: this.newAgent.engine,
               model: this.newAgent.model.trim(),
               terminal_mode: this.newAgent.terminal_mode,
@@ -3885,6 +4189,7 @@
             slug: agent.slug,
             name: agent.name || '',
             description: agent.description || '',
+            parent_agent: agent.parent_agent || '',
             engine: engine,
             modelSelect: modelSelect,
             model: model || (isPreset ? modelSelect : ''),
@@ -3959,6 +4264,7 @@
             const payload = {
               name: this.editAgent.name,
               description: this.editAgent.description,
+              parent_agent: this.editAgent.parent_agent || null,
               engine: this.editAgent.engine,
               model: this.editAgent.model.trim(),
               master_prompt: this.editAgent.master_prompt,

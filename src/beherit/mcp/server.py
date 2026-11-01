@@ -77,7 +77,7 @@ class MCPServer:
                 }
             })
 
-        # Multi-Agent Delegation Tool (BEH-060)
+        # Multi-Agent Delegation & Subagent Creation Tools (BEH-060)
         tools.append({
             "name": "call_agent",
             "description": "Invoke another specialized AI agent in Beherit to delegate a subtask, consult domain expertise, or coordinate workflows.",
@@ -98,6 +98,22 @@ class MCPServer:
                     }
                 },
                 "required": ["agent_slug", "prompt"]
+            }
+        })
+        tools.append({
+            "name": "create_subagent",
+            "description": "Dynamically create a new specialized subagent assigned to this parent agent.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "name": {"type": "string", "description": "Human-readable name of the subagent"},
+                    "slug": {"type": "string", "description": "Unique identifier slug (lowercase letters, numbers, hyphens)"},
+                    "description": {"type": "string", "description": "Short description of role and specialty"},
+                    "master_prompt": {"type": "string", "description": "System role prompt for this subagent"},
+                    "instructions": {"type": "string", "description": "Operating instructions for this subagent"},
+                    "model": {"type": "string", "description": "Model to use (default: inherits parent model)"}
+                },
+                "required": ["name", "slug", "master_prompt"]
             }
         })
 

@@ -13,6 +13,19 @@ from beherit.models.agent import AgentModel, AgentSchedule, ScheduledJob
 client = TestClient(app)
 
 
+@pytest.fixture(autouse=True)
+def mock_antigravity_stream(monkeypatch):
+    """Ensure engine does not invoke live CLI process in unit tests."""
+    mock_engine = scheduler.engine_registry.get_engine("antigravity")
+
+    async def mock_stream_chat(agent, message, history=None):
+        yield {"event": "thought", "data": "Przetwarzanie..."}
+        yield {"event": "token", "data": "Raport z wykonania zadania testowego."}
+        yield {"event": "done", "data": {"completed": True}}
+
+    monkeypatch.setattr(mock_engine, "stream_chat", mock_stream_chat)
+
+
 def test_agent_run_webhook_endpoint(tmp_path: Path, monkeypatch):
     """Test POST /api/agents/{slug}/run universal webhook for external callers (e.g. n8n - BEH-048)."""
     monkeypatch.setattr(repo, "base_dir", tmp_path)

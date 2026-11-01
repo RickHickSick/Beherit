@@ -388,7 +388,7 @@ class CapabilitiesGuard:
                 }
             })
 
-        # Multi-Agent delegation tool (BEH-060)
+        # Multi-Agent delegation & Subagent creation tool (BEH-060)
         raw_tools.append({
             "name": "call_agent",
             "description": "Delegate a subtask or question to another specialized AI agent in Beherit.",
@@ -400,6 +400,22 @@ class CapabilitiesGuard:
                     "context": {"type": "object", "description": "Optional dictionary context"}
                 },
                 "required": ["agent_slug", "prompt"]
+            }
+        })
+        raw_tools.append({
+            "name": "create_subagent",
+            "description": "Dynamically create a new specialized subagent under this parent agent for delegating tasks.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "name": {"type": "string", "description": "Human-readable name of the subagent"},
+                    "slug": {"type": "string", "description": "Unique identifier slug (lowercase letters, numbers, hyphens)"},
+                    "description": {"type": "string", "description": "Short description of role and specialty"},
+                    "master_prompt": {"type": "string", "description": "System role prompt for this subagent"},
+                    "instructions": {"type": "string", "description": "Operating instructions for this subagent"},
+                    "model": {"type": "string", "description": "Model to use (default: inherits parent model)"}
+                },
+                "required": ["name", "slug", "master_prompt"]
             }
         })
 
@@ -712,6 +728,63 @@ class CapabilitiesGuard:
             "call_stack": stack,
         }
 
+    async def create_subagent(
+        self,
+        caller_agent: AgentModel,
+        name: str,
+        slug: str,
+        master_prompt: str,
+        instructions: str = "",
+        description: str = "",
+        model: str | None = None,
+    ) -> dict[str, Any]:
+        """Dynamically create a new subagent assigned to caller_agent."""
+        from beherit.core.repository import AgentRepository
+        repo = AgentRepository(base_dir=self.default_workspace)
+        if repo.load_agent(slug):
+            return {"success": False, "error": f"Agent or subagent with slug '{slug}' already exists."}
+
+        subagent = AgentModel(
+            name=name,
+            slug=slug,
+            description=description,
+            engine=caller_agent.engine,
+            model=model or caller_agent.model,
+            master_prompt=master_prompt,
+            instructions=instructions or f"Jesteś wyspecjalizowanym podagentem dla {caller_agent.name}.",
+            capabilities=caller_agent.capabilities.model_copy(),
+            parent_agent=caller_agent.slug,
+        )
+        repo.save_agent(subagent)
+
+        # Inherit caller agent's auth if present
+        auth_file = repo.auth_manager.get_session_file(caller_agent.slug)
+        if auth_file.exists():
+            sub_auth_file = repo.auth_manager.get_session_file(slug)
+            sub_auth_file.parent.mkdir(parents=True, exist_ok=True)
+            sub_auth_file.write_text(auth_file.read_text(encoding="utf-8"), encoding="utf-8")
+            try:
+                sub_auth_file.chmod(0o600)
+            except Exception:
+                pass
+
+        # Update caller agent's subagents list
+        if slug not in caller_agent.subagents:
+            caller_agent.subagents.append(slug)
+            repo.save_agent(caller_agent)
+
+        return {
+            "success": True,
+            "subagent": {
+                "name": name,
+                "slug": slug,
+                "parent_agent": caller_agent.slug,
+                "model": subagent.model,
+                "engine": subagent.engine,
+            },
+            "message": f"Subagent '{name}' ({slug}) created and linked to parent '{caller_agent.name}'."
+        }
+
     async def dispatch_tool(
         self,
         agent: AgentModel,
@@ -744,6 +817,22 @@ class CapabilitiesGuard:
                 prompt=prompt,
                 context=context,
                 call_stack=call_stack,
+            )
+        elif tool_name == "create_subagent":
+            name = args.get("name", "")
+            slug = args.get("slug", "")
+            master_prompt = args.get("master_prompt", "")
+            instructions = args.get("instructions", "")
+            description = args.get("description", "")
+            model = args.get("model")
+            return await self.create_subagent(
+                caller_agent=agent,
+                name=name,
+                slug=slug,
+                master_prompt=master_prompt,
+                instructions=instructions,
+                description=description,
+                model=model,
             )
         elif tool_name == "save_memory":
             fact = args.get("fact", "")
@@ -853,5 +942,5 @@ class CapabilitiesGuard:
         else:
             return {
                 "success": False,
-                "error": f"Unknown tool '{tool_name}'. Available: execute_bash, read_file, write_file, list_dir, call_agent, save_memory, recall_memory, forget_memory, manage_todo, plane_list_issues, plane_create_issue, plane_update_state, list_skills, run_skill, query_knowledge_graph, send_telegram_notification",
+                "error": f"Unknown tool '{tool_name}'. Available: execute_bash, read_file, write_file, list_dir, call_agent, create_subagent, save_memory, recall_memory, forget_memory, manage_todo, plane_list_issues, plane_create_issue, plane_update_state, list_skills, run_skill, query_knowledge_graph, send_telegram_notification",
             }

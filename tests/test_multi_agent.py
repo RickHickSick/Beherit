@@ -160,6 +160,78 @@ def test_build_system_context_injects_peer_agents(test_agents):
 
     with patch("beherit.core.repository.AgentRepository.list_agents", return_value=[agent_a, agent_b]):
         ctx = BaseAgentEngine.build_system_context(agent_a)
-        assert "## Dostępni Agenci do Współpracy (Narzędzie call_agent)" in ctx
+        assert "## Dostępni Agenci do Współpracy" in ctx
+        assert "call_agent" in ctx
         assert "Ekspert Finansowy" in ctx
         assert "analityk-rynkow" in ctx
+
+
+@pytest.mark.asyncio
+async def test_guard_create_subagent_tool(test_agents, tmp_path):
+    """Test creating a subagent dynamically via CapabilitiesGuard."""
+    repo, agent_a, agent_b = test_agents
+    guard = CapabilitiesGuard(default_workspace=tmp_path)
+
+    result = await guard.create_subagent(
+        caller_agent=agent_a,
+        name="Tester Kodu",
+        slug="tester-kodu",
+        description="Wyspecjalizowany tester jednostkowy",
+        master_prompt="Jesteś ekspertem testów w pytest.",
+        instructions="Zawsze pisz testy asynchroniczne.",
+    )
+
+    assert result["success"] is True
+    assert result["subagent"]["slug"] == "tester-kodu"
+    assert result["subagent"]["parent_agent"] == "koordynator"
+
+    # Verify loaded agent
+    created = repo.load_agent("tester-kodu")
+    assert created is not None
+    assert created.parent_agent == "koordynator"
+
+    # Verify parent has subagent registered
+    parent = repo.load_agent("koordynator")
+    assert "tester-kodu" in parent.subagents
+
+
+def test_subagent_api_endpoints(test_agents, tmp_path, monkeypatch):
+    """Test REST API endpoints for subagents management."""
+    from fastapi.testclient import TestClient
+    from beherit.main import app
+    from beherit.api.routes import repo, auth_mgr
+    from beherit.config import settings
+
+    monkeypatch.setattr(repo, "base_dir", tmp_path)
+    monkeypatch.setattr(auth_mgr, "base_dir", tmp_path)
+    monkeypatch.setattr(settings, "BEHERIT_ACCESS_TOKEN", None)
+
+    client = TestClient(app)
+
+    # 1. Create subagent via POST /api/agents/{slug}/subagents
+    resp = client.post(
+        "/api/agents/koordynator/subagents",
+        json={
+            "name": "Analityk Logów",
+            "slug": "analityk-logow",
+            "description": "Parsowanie logów systemowych",
+            "master_prompt": "Analizuj logi journalctl i coredump.",
+            "inherit_auth": True,
+        },
+    )
+    assert resp.status_code == 201
+    data = resp.json()
+    assert data["status"] == "created"
+    assert data["subagent"]["parent_agent"] == "koordynator"
+
+    # 2. List subagents via GET /api/agents/{slug}/subagents
+    list_resp = client.get("/api/agents/koordynator/subagents")
+    assert list_resp.status_code == 200
+    subagents = list_resp.json()["subagents"]
+    assert len(subagents) >= 1
+    assert any(s["slug"] == "analityk-logow" for s in subagents)
+
+    # 3. Unlink subagent via DELETE /api/agents/{slug}/subagents/{sub_slug}
+    del_resp = client.delete("/api/agents/koordynator/subagents/analityk-logow")
+    assert del_resp.status_code == 200
+    assert del_resp.json()["status"] == "unlinked"

@@ -101,6 +101,10 @@ class AgentModel(BaseModel):
         description="Dictionary of external MCP servers configured for this agent",
     )
     
+    # Subagents & Swarm Hierarchy (BEH-060)
+    parent_agent: str | None = Field(default=None, description="Slug of parent agent if this is a subagent")
+    subagents: list[str] = Field(default_factory=list, description="List of subagent slugs directly managed by this agent")
+
     # Metadata fields for runtime observation
     file_path: str | None = Field(default=None, description="Absolute path on disk to agent.md")
     is_valid: bool = Field(default=True, description="False if file has syntax warnings or errors")

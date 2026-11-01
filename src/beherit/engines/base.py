@@ -61,10 +61,20 @@ class BaseAgentEngine(ABC):
         except Exception:
             pass
 
-        # Add available peer agents for delegation (BEH-060)
+        # Add available peer agents and subagents for delegation (BEH-060)
         try:
             from beherit.core.repository import AgentRepository
             repo = AgentRepository()
+            
+            if agent.parent_agent:
+                parent = repo.load_agent(agent.parent_agent)
+                parent_title = parent.name if parent else agent.parent_agent
+                parts.append(
+                    f"## Relacja Hierarchiczna (Subagent)\n"
+                    f"Jesteś dedykowanym podagentem przypisanym do agenta nadrzędnego: **{parent_title}** (slug: `{agent.parent_agent}`).\n"
+                    f"Skup się na realizacji zadań delegowanych przez agenta głównego."
+                )
+
             other_agents = [a for a in repo.list_agents() if a.slug != agent.slug]
             if other_agents:
                 agent_items = [
@@ -72,9 +82,10 @@ class BaseAgentEngine(ABC):
                     for a in other_agents
                 ]
                 parts.append(
-                    "## Dostępni Agenci do Współpracy (Narzędzie call_agent)\n"
+                    "## Dostępni Agenci do Współpracy (Narzędzia call_agent i create_subagent)\n"
                     "Posiadasz możliwość delegowania podzadań do innych zarejestrowanych agentów Beherit za pomocą narzędzia `call_agent(agent_slug, prompt, context)`:\n"
                     + "\n".join(agent_items)
+                    + "\nMożesz również w locie powołać nowego wyspecjalizowanego podagenta za pomocą narzędzia `create_subagent(name, slug, master_prompt)`."
                 )
         except Exception:
             pass

@@ -64,6 +64,8 @@ class CreateAgentRequest(BaseModel):
     auth_type: str | None = Field(default="api", description="Key type: 'api' or 'sdk'")
     auth_token: str | None = Field(default=None, description="Initial API key or SDK session token")
     import_local_auth: bool = Field(default=False, description="Automatically import local host CLI session")
+    parent_agent: str | None = Field(default=None, description="Slug of parent agent if this is a subagent")
+    subagents: list[str] = Field(default_factory=list, description="List of subagent slugs directly managed by this agent")
 
 
 class UpdateAgentRequest(BaseModel):
@@ -76,6 +78,21 @@ class UpdateAgentRequest(BaseModel):
     capabilities: AgentCapabilities | None = None
     schedule: AgentSchedule | None = None
     mcp_servers: dict[str, MCPServerConfig] | None = None
+    parent_agent: str | None = None
+    subagents: list[str] | None = None
+
+
+class CreateSubagentRequest(BaseModel):
+    name: str = Field(..., min_length=2, max_length=100)
+    slug: str = Field(..., min_length=2, max_length=50, pattern=r"^[a-z0-9-]+$")
+    description: str = Field(default="")
+    engine: EngineType | None = None
+    model: str | None = None
+    master_prompt: str = Field(..., min_length=2)
+    instructions: str | None = Field(default="")
+    capabilities: AgentCapabilities | None = None
+    inherit_auth: bool = Field(default=True, description="Inherit parent agent credentials")
+    auth_token: str | None = Field(default=None)
 
 
 class SaveKnowledgeRequest(BaseModel):
@@ -318,10 +335,19 @@ async def create_agent(payload: CreateAgentRequest):
         capabilities=payload.capabilities or AgentCapabilities(),
         schedule=payload.schedule or AgentSchedule(),
         mcp_servers=payload.mcp_servers or {},
+        parent_agent=payload.parent_agent,
+        subagents=payload.subagents or [],
     )
 
     target_dir = Path(payload.custom_target_dir) if payload.custom_target_dir else None
     saved_path = repo.save_agent(agent_model, target_dir=target_dir)
+
+    # If linked to parent agent, register this slug in parent's subagents list
+    if payload.parent_agent:
+        parent = repo.load_agent(payload.parent_agent)
+        if parent and agent_model.slug not in parent.subagents:
+            parent.subagents.append(agent_model.slug)
+            repo.save_agent(parent)
 
     # Automatically connect agent via SDK token, API key, or host session import
     if payload.import_local_auth:
@@ -511,6 +537,10 @@ async def update_agent(slug: str, payload: UpdateAgentRequest):
         agent.schedule = payload.schedule
     if payload.mcp_servers is not None:
         agent.mcp_servers = payload.mcp_servers
+    if payload.parent_agent is not None:
+        agent.parent_agent = payload.parent_agent
+    if payload.subagents is not None:
+        agent.subagents = payload.subagents
 
     repo.save_agent(agent)
     scheduler.sync_all_jobs()
@@ -528,6 +558,96 @@ async def delete_agent(slug: str):
     db_mgr.delete_agent_data(slug)
     deleted = repo.delete_agent(slug)
     return {"status": "deleted", "slug": slug, "success": deleted}
+
+
+# --- Subagent Management Endpoints (BEH-060) ---
+
+
+@router.get("/{slug}/subagents")
+async def list_subagents(slug: str):
+    """List all specialized subagents linked to this parent agent."""
+    parent = repo.load_agent(slug)
+    if not parent:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Parent agent not found.")
+
+    all_agents = repo.list_agents()
+    subagents = [
+        a for a in all_agents
+        if a.parent_agent == slug or a.slug in parent.subagents
+    ]
+    return {"parent_slug": slug, "subagents": [s.model_dump(mode="json") for s in subagents]}
+
+
+@router.post("/{slug}/subagents", status_code=status.HTTP_201_CREATED)
+async def create_subagent_endpoint(slug: str, payload: CreateSubagentRequest):
+    """Create a new specialized subagent directly under this parent agent."""
+    parent = repo.load_agent(slug)
+    if not parent:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Parent agent '{slug}' not found.")
+
+    if repo.load_agent(payload.slug):
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=f"Agent '{payload.slug}' already exists.")
+
+    engine = payload.engine or parent.engine
+    model = payload.model or parent.model
+    capabilities = payload.capabilities or parent.capabilities.model_copy()
+
+    subagent = AgentModel(
+        name=payload.name,
+        slug=payload.slug,
+        description=payload.description or f"Wyspecjalizowany podagent dla {parent.name}",
+        engine=engine,
+        model=model,
+        master_prompt=payload.master_prompt,
+        instructions=payload.instructions or f"Jesteś dedykowanym podagentem dla {parent.name}.",
+        capabilities=capabilities,
+        parent_agent=slug,
+    )
+    repo.save_agent(subagent)
+
+    # Inherit credentials from parent if requested
+    if payload.inherit_auth:
+        parent_auth = auth_mgr.get_session_file(slug)
+        if parent_auth.exists():
+            sub_auth = auth_mgr.get_session_file(subagent.slug)
+            sub_auth.parent.mkdir(parents=True, exist_ok=True)
+            sub_auth.write_text(parent_auth.read_text(encoding="utf-8"), encoding="utf-8")
+            try:
+                sub_auth.chmod(0o600)
+            except Exception:
+                pass
+    elif payload.auth_token:
+        auth_mgr.save_manual_token(subagent.slug, payload.auth_token, provider=engine)
+
+    # Add to parent's subagents list
+    if subagent.slug not in parent.subagents:
+        parent.subagents.append(subagent.slug)
+        repo.save_agent(parent)
+
+    return {
+        "status": "created",
+        "parent_slug": slug,
+        "subagent": repo.load_agent(subagent.slug).model_dump(mode="json"),
+    }
+
+
+@router.delete("/{slug}/subagents/{sub_slug}")
+async def unlink_subagent_endpoint(slug: str, sub_slug: str):
+    """Unlink a subagent from its parent agent."""
+    parent = repo.load_agent(slug)
+    if not parent:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Parent agent not found.")
+
+    if sub_slug in parent.subagents:
+        parent.subagents.remove(sub_slug)
+        repo.save_agent(parent)
+
+    sub = repo.load_agent(sub_slug)
+    if sub and sub.parent_agent == slug:
+        sub.parent_agent = None
+        repo.save_agent(sub)
+
+    return {"status": "unlinked", "parent_slug": slug, "subagent_slug": sub_slug}
 
 
 # --- Per-Agent Authentication Endpoints ---
