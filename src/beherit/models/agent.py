@@ -4,7 +4,7 @@ import time
 from datetime import date
 from enum import Enum
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
 class EngineType(str, Enum):
@@ -52,6 +52,22 @@ class AgentCapabilities(BaseModel):
     file_read: bool = Field(default=True)
     file_write: bool = Field(default=False)
     database_read: bool = Field(default=False)
+
+    @field_validator("terminal_mode", mode="before")
+    @classmethod
+    def normalize_terminal_mode(cls, v: object) -> TerminalMode | object:
+        """Gracefully handle loose string representations like 'none', 'off', 'false', etc."""
+        if isinstance(v, str):
+            v_clean = v.strip().lower()
+            if v_clean in ("none", "off", "false", "no", "disabled"):
+                return TerminalMode.DISABLED
+            if v_clean in ("restricted", "sandbox"):
+                return TerminalMode.RESTRICTED
+            if v_clean in ("unrestricted", "full", "host", "root"):
+                return TerminalMode.UNRESTRICTED
+        elif v is None or v is False:
+            return TerminalMode.DISABLED
+        return v
 
 
 class ScheduleReporting(BaseModel):

@@ -129,3 +129,24 @@ async def test_antigravity_prompt_injection(tmp_path: Path):
     token_texts = "".join(e["data"] for e in events if e["event"] == "token")
     assert "Echo from Prompt Test Bot" in token_texts
     assert "Identity: You are a strict code reviewer" in token_texts
+
+
+def test_terminal_mode_resilient_normalization():
+    """Verify that loose values like 'none', 'off', 'sandbox', None are normalized correctly."""
+    from beherit.models.agent import AgentCapabilities, TerminalMode
+
+    cap1 = AgentCapabilities.model_validate({"terminal_mode": "none"})
+    assert cap1.terminal_mode == TerminalMode.DISABLED
+
+    cap2 = AgentCapabilities.model_validate({"terminal_mode": "off"})
+    assert cap2.terminal_mode == TerminalMode.DISABLED
+
+    cap3 = AgentCapabilities.model_validate({"terminal_mode": "sandbox"})
+    assert cap3.terminal_mode == TerminalMode.RESTRICTED
+
+    cap4 = AgentCapabilities.model_validate({"terminal_mode": "full"})
+    assert cap4.terminal_mode == TerminalMode.UNRESTRICTED
+
+    cap5 = AgentCapabilities.model_validate({"terminal_mode": None})
+    assert cap5.terminal_mode == TerminalMode.DISABLED
+
